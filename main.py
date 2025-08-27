@@ -189,7 +189,7 @@ class DetectTextLines:
         )
         for idx, (x, y, w, h) in enumerate(text_lines):
             cropped = image[y:y+h, x:x+w]
-            cv2.imwrite(f"text_line_{idx+1}.png", cropped)
+            cv2.imwrite(f"img/text_line_{idx+37}.png", cropped)
         return text_lines
 
     def detect_items(
@@ -307,52 +307,6 @@ class ConfigPositions:
 
 
 
-# def preprocess_and_extract_text(image: np.ndarray) -> str:
-#     """
-#     Preprocess image to improve OCR accuracy and extract text
-#     """
-#     # Read image using OpenCV
-    
-#     # Convert to grayscale
-#     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-#     # Apply threshold to get binary image
-#     _, thresh = cv2.threshold(gray, 50, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
-    
-#     # Optional: Remove noise
-#     kernel = np.ones((1, 1), np.uint8)
-#     processed = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-#     processed = cv2.medianBlur(processed, 3)
-
-#     # Show images using matplotlib
-#     plt.figure(figsize=(12, 4))
-#     plt.subplot(1, 3, 1)
-#     plt.title("Grayscale")
-#     plt.imshow(gray, cmap='gray')
-#     plt.axis('off')
-
-#     plt.subplot(1, 3, 2)
-#     plt.title("Thresholded")
-#     plt.imshow(thresh, cmap='gray')
-#     plt.axis('off')
-
-#     plt.subplot(1, 3, 3)
-#     plt.title("Processed")
-#     plt.imshow(processed, cmap='gray')
-#     plt.axis('off')
-
-#     plt.tight_layout()
-#     plt.show()
-    
-#     # Convert back to PIL image for Tesseract
-#     custom_config = r'--oem 3 --psm 8 -c tessedit_char_whitelist=0123456789:,.'
-#     # Extract text
-#     # text = pytesseract.image_to_string(thresh)
-#     text = pytesseract.image_to_string(processed, config=custom_config)
-    
-#     return text.strip()
-
-
 
 
 
@@ -386,7 +340,7 @@ def preprocess_line_image(image_path):
     
     
     # kernel = np.ones((1, 1), np.uint8)
-    # result = cv2.dilate(cleaned, kernel, iterations=1)
+    # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
     
     # result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel, iterations=1)
 
@@ -409,7 +363,9 @@ def preprocess_line_image(image_path):
     #         # result[mask == 255] = 0
 
     
-    # result = cv2.bitwise_not(result)
+    cleaned = cv2.resize(cleaned, None, fx=2, fy=2)
+    
+    cleaned = cv2.bitwise_not(cleaned)
 
     # Plot all images
     plt.figure(figsize=(12, 4))
@@ -450,7 +406,7 @@ def extract_formatted_line(image_path):
     
     # Configure Tesseract for your specific character set
     # Allow digits, colon, period, and comma
-    custom_config = r'--oem 3 --psm 12 -c tessedit_char_whitelist=0123456789:., '
+    custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
     
     # Extract text
     text = pytesseract.image_to_string(processed_img, config=custom_config)
@@ -476,10 +432,10 @@ if __name__ == "__main__":
 
     line_detector = DetectTextLines()
 
-    image = cv2.imread("screenshot7.png")
+    image = cv2.imread("img/screenshot5.png")
     text_lines = line_detector.detect_price(
         image)
-
+    exit(0)
     # for i in range(7):
     #     print(f"Processing image {i+1}")
     #     image = cv2.imread(f"screenshot{i+1}.png")
@@ -491,9 +447,9 @@ if __name__ == "__main__":
 
     # Simple extraction
     # numbers = extractor.extract("numbers_image.png")
-    for i in range(16, 12, -1):
+    for i in range(17, 0, -1):
         extracted_text, processed_img, original_img = extract_formatted_line(f"text_line_{i}.png")
         print(f"Extracted text: '{extracted_text}'")
-        break
+        # break
 
     
