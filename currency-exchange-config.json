@@ -1,0 +1,42 @@
+{
+    "Resolution": [
+        2560,
+        1440
+    ],
+    "I_want_name": [
+        952,
+        319
+    ],
+    "I_want_price": [
+        1155,
+        319
+    ],
+    "I_have_name": [
+        1607,
+        317
+    ],
+    "I_have_price": [
+        1398,
+        321
+    ],
+    "Market_mid": [
+        1272,
+        244
+    ],
+    "Market_left": [
+        1148,
+        221
+    ],
+    "Market_right": [
+        1409,
+        227
+    ],
+    "Items_top_left": [
+        963,
+        185
+    ],
+    "Items_bottom_right": [
+        1877,
+        1207
+    ]
+}
