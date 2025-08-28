@@ -325,7 +325,7 @@ def preprocess_line_image(image_path):
     # Apply adaptive thresholding
     # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
                                 #   cv2.THRESH_BINARY, 11, 1)
-    _, thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+    _, thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)
     
     
     # Apply morphological operations to clean up
@@ -365,63 +365,59 @@ def preprocess_line_image(image_path):
     
     cleaned = cv2.resize(cleaned, None, fx=2, fy=2)
     
+    kernel = np.ones((1, 1), np.uint8)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
+    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+    
     cleaned = cv2.bitwise_not(cleaned)
 
     # Plot all images
-    plt.figure(figsize=(12, 4))
-    plt.subplot(1, 4, 1)
-    plt.title("Original")
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    plt.axis('off')
+    # plt.figure(figsize=(12, 4))
+    # plt.subplot(1, 4, 1)
+    # plt.title("Original")
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.axis('off')
 
-    plt.subplot(1, 4, 2)
-    plt.title("Grayscale")
-    plt.imshow(gray, cmap='gray')
-    plt.axis('off')
+    # plt.subplot(1, 4, 2)
+    # plt.title("Grayscale")
+    # plt.imshow(gray, cmap='gray')
+    # plt.axis('off')
 
-    plt.subplot(1, 4, 3)
-    plt.title("Thresholded")
-    plt.imshow(thresh, cmap='gray')
-    plt.axis('off')
+    # plt.subplot(1, 4, 3)
+    # plt.title("Thresholded")
+    # plt.imshow(thresh, cmap='gray')
+    # plt.axis('off')
 
-    plt.subplot(1, 4, 4)
-    plt.title("Processed")
-    plt.imshow(cleaned, cmap='gray')
-    plt.axis('off')
+    # plt.subplot(1, 4, 4)
+    # plt.title("Processed")
+    # plt.imshow(cleaned, cmap='gray')
+    # plt.axis('off')
 
-
-
-
-    plt.tight_layout()
-    plt.show()
+    # plt.tight_layout()
+    # plt.show()
     
-    return cleaned, image
+    return cleaned
 
 def extract_formatted_line(image_path):
     """
     Extract formatted line with numbers, colons, dots, and commas
     """
     # Preprocess image
-    processed_img, original_img = preprocess_line_image(image_path)
+    processed_img = preprocess_line_image(image_path)
     
     # Configure Tesseract for your specific character set
     # Allow digits, colon, period, and comma
     custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
     
     # Extract text
-    text = pytesseract.image_to_string(processed_img, config=custom_config)
+    text = pytesseract.image_to_string(processed_img, config=custom_config).strip()
     
     
-    return text, processed_img, original_img
+    return text
 
 
 
-
-
-
-
-# Example usage
-if __name__ == "__main__":
+def extract(img_path: str = "img/text_line_31.png"):
     pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
@@ -430,26 +426,33 @@ if __name__ == "__main__":
     # cv2.imwrite("screenshot8.png", img)  # Save the screenshot for reference
     # exit(0)
 
-    line_detector = DetectTextLines()
+    # line_detector = DetectTextLines()
 
-    image = cv2.imread("img/screenshot5.png")
-    text_lines = line_detector.detect_price(
-        image)
-    exit(0)
+    # image = cv2.imread(img_path)
+    # text_lines = line_detector.detect_price(
+    #     image)
+    
+    # exit(0)
     # for i in range(7):
     #     print(f"Processing image {i+1}")
     #     image = cv2.imread(f"screenshot{i+1}.png")
     #     # Detect text lines
     #     text_lines, result_image = line_detector.detect_price(image)
 
-    # Usage
-    # extractor = NumberExtractor(whitelist="0123456789.,:", psm_mode=13)
-
+    extracted_text = extract_formatted_line(img_path)
+    print(f"Extracted text: '{extracted_text}'")
+    return extracted_text
     # Simple extraction
     # numbers = extractor.extract("numbers_image.png")
-    for i in range(17, 0, -1):
-        extracted_text, processed_img, original_img = extract_formatted_line(f"text_line_{i}.png")
-        print(f"Extracted text: '{extracted_text}'")
-        # break
+    # for i in range(17, 0, -1):
+    #     extracted_text = extract_formatted_line(f"text_line_{i}.png")
+    #     print(f"Extracted text: '{extracted_text}'")
+    #     # break
 
+
+
+
+# Example usage
+if __name__ == "__main__":
     
+    extract()
