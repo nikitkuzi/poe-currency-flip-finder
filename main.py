@@ -7,6 +7,7 @@ import json
 import mouse
 import pytesseract
 
+
 class ScreenCapture:
     """Handles screen capturing of specified regions based on configuration.
     """
@@ -138,8 +139,9 @@ class DetectTextLines:
 
     def detect_price(
         self,
-        image: np.ndarray
-    ) -> list[tuple[int, int, int, int]]:
+        image: np.ndarray,
+        merge: bool = True
+    ) -> tuple[list[np.ndarray], list[tuple[int, int, int, int]]]:
         """
         Detect text lines in an image (for price window) using computer vision techniques.
 
@@ -150,6 +152,7 @@ class DetectTextLines:
         Returns:
             list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
+
 
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -175,27 +178,54 @@ class DetectTextLines:
         )
 
         # Filter contours based on area and aspect ratio to find text lines
-        text_lines: list[tuple[int, int, int, int]] = []
+        text_boxes: list[tuple[int, int, int, int]] = []
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
-            text_lines.append((x, y, w, h))
+            text_boxes.append((x, y, w, h))
 
         # Sort text lines by their y-coordinate (top to bottom)
-        text_lines.sort(key=lambda rect: rect[1])
+        text_boxes.sort(key=lambda rect: rect[1])
+
+        
+        # for (x, y, w, h) in text_boxes:
+        #     cv2.rectangle(result_image, (x, y),
+        #                   (x + w, y + h), (0, 255, 0), 1)
+
+        # plt.subplot(2, 3, 1)
+        # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
+        # plt.title('Detected Text Lines')
+        # plt.axis('off')
+        # plt.show()
 
         # Merge boxes on the same line
-        text_lines = self.merge_boxes_on_same_line(
-            text_lines, y_threshold=8, x_overlap_threshold=0.3
-        )
-        for idx, (x, y, w, h) in enumerate(text_lines):
-            cropped = image[y:y+h, x:x+w]
-            cv2.imwrite(f"img/text_line_{idx+37}.png", cropped)
-        return text_lines
+        if merge:
+            text_boxes = self.merge_boxes_on_same_line(
+                text_boxes, y_threshold=8, x_overlap_threshold=0.3
+            )
+
+        # for idx, (x, y, w, h) in enumerate(text_boxes):
+        #     cropped = image[y:, x:x+w]
+        #     cv2.imwrite(f"img/text_number_{idx+1}.png", cropped)
+        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
+        text_boxes = tmp
+
+        if merge:
+            text_imgs = [image[y:y+h, x:x+w]
+                         for (x, y, w, h) in text_boxes]
+        else:
+            text_boxes.sort(key=lambda rect: rect[0])
+            text_imgs = [image[y:, x:x+w]
+                         for (x, y, w, h) in text_boxes]
+        # for img in text_imgs:
+        #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        #     plt.axis('off')
+        #     plt.show()
+        return text_imgs, text_boxes
 
     def detect_items(
         self,
         image: np.ndarray
-    ) -> list[tuple[int, int, int, int]]:
+    ) -> tuple[list[np.ndarray], list[tuple[int, int, int, int]]]:
         """
         Detect text lines in an image (for items window) using computer vision techniques.
 
@@ -231,17 +261,24 @@ class DetectTextLines:
         )
 
         # Filter contours based on area and aspect ratio to find text lines
-        text_lines: list[tuple[int, int, int, int]] = []
+        text_boxes: list[tuple[int, int, int, int]] = []
         for contour in contours:
             x, y, w, h = cv2.boundingRect(contour)
-            text_lines.append((x, y, w, h))
+            text_boxes.append((x, y, w, h))
 
         # Sort text lines by their y-coordinate (top to bottom)
-        text_lines.sort(key=lambda rect: rect[1])
-        # for idx, (x, y, w, h) in enumerate(text_lines):
+        text_boxes.sort(key=lambda rect: rect[1])
+        # for idx, (x, y, w, h) in enumerate(text_boxes):
         #     cropped = image[y:y+h, x:x+w]
         #     cv2.imwrite(f"text_line_{idx+1}.png", cropped)
-        return text_lines
+
+        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
+        text_boxes = tmp
+
+        text_imgs = [image[y:y+h, x:x+w]
+                     for (x, y, w, h) in text_boxes]
+
+        return text_imgs, text_boxes
 
 
 class ConfigPositions:
@@ -305,120 +342,141 @@ class ConfigPositions:
         return self.config.get(key, None)
 
 
-
-
-
-
-
-def preprocess_line_image(image_path):
+class TextExtractor:
     """
-    Preprocess image containing a line with numbers and separators
+    Extracts formatted text lines containing numbers, colons, dots, and commas
+    from images using OCR (Optical Character Recognition) with Tesseract.
     """
-    # Read image
-    image = cv2.imread(image_path)
-    if image is None:
-        raise ValueError(f"Could not load image from {image_path}")
-    
-    # Convert to grayscale
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    
-    # Apply adaptive thresholding
-    # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C, 
-                                #   cv2.THRESH_BINARY, 11, 1)
-    _, thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)
-    
-    
-    # Apply morphological operations to clean up
-    kernel = np.ones((1, 1), np.uint8)
-    cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
-    
-    # Invert back to black text on white background
-    # kernel = np.ones((2, 2), np.uint8)
-    # result = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
-    
-    
-    
-    # kernel = np.ones((1, 1), np.uint8)
-    # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
-    
-    # result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel, iterations=1)
+
+    def __init__(self, tesseract_path: str = r"C:\Program Files\Tesseract-OCR\tesseract.exe") -> None:
+        pytesseract.pytesseract.tesseract_cmd = tesseract_path
+
+    def __preprocess_number_image(self, image):
+        """
+        Preprocess image containing a line with numbers and separators
+        """
+        # Read image
+        if image is None:
+            raise ValueError(f"Could not load image")
+
+        # Convert to grayscale
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
+        # Apply adaptive thresholding
+        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+        #   cv2.THRESH_BINARY, 11, 1)
+        _, thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)
+
+        # Apply morphological operations to clean up
+        kernel = np.ones((1, 1), np.uint8)
+        cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+
+        # Invert back to black text on white background
+        # kernel = np.ones((2, 2), np.uint8)
+        # result = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
+
+        # kernel = np.ones((1, 1), np.uint8)
+        # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
+
+        # result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel, iterations=1)
+
+        # Find contours of white regions (hollow areas)
+        # Find contours of white regions (hollow areas)
+        # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        # result = thresh.copy()
+        # # Fill each contour that represents a hollow area
+        # for contour in contours:
+        #     area = cv2.contourArea(contour)
+
+        #     # Only fill areas larger than minimum (to avoid noise)
+        #     if area > 1:
+        #         # Create mask for this contour
+        #         mask = np.zeros_like(gray)
+        #         cv2.drawContours(result, [contour], -1, 255, -1)
+
+        #         # Fill the hollow area with black
+        #         # result[mask == 255] = 0
+
+        cleaned = cv2.resize(cleaned, None, fx=2, fy=2)
+
+        kernel = np.ones((1, 1), np.uint8)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
+
+        cleaned = cv2.bitwise_not(cleaned)
+
+        # Plot all images
+        # plt.figure(figsize=(12, 4))
+        # plt.subplot(1, 4, 1)
+        # plt.title("Original")
+        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
+
+        # plt.subplot(1, 4, 2)
+        # plt.title("Grayscale")
+        # plt.imshow(gray, cmap='gray')
+        # plt.axis('off')
+
+        # plt.subplot(1, 4, 3)
+        # plt.title("Thresholded")
+        # plt.imshow(thresh, cmap='gray')
+        # plt.axis('off')
+
+        # plt.subplot(1, 4, 4)
+        # plt.title("Processed")
+        # plt.imshow(cleaned, cmap='gray')
+        # plt.axis('off')
+
+        # plt.tight_layout()
+        # plt.show()
+
+        return cleaned
+
+    def extract_number(self, image):
+        """
+        Extract formatted line with numbers, colons, dots, and commas
+        """
+        # Preprocess image
+        processed_img = self.__preprocess_number_image(image)
+        # Configure Tesseract for your specific character set
+        # Allow digits, colon, period, and comma
+        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
+
+        # Extract text
+        text = pytesseract.image_to_string(
+            processed_img, config=custom_config).strip()
+
+        return text
+
+    def extract_text(self, image):
+        """
+        Extract all text from an image using Tesseract OCR.
+
+        Args:
+            image_path (str): Path to the input image.
+
+        Returns:
+            str: Extracted text.
+        """
+        # Read image
+        if image is None:
+            raise ValueError(f"Could not load image")
+
+        # Configure Tesseract
+        custom_config = r'--oem 3 --psm 6 -l eng'
+        # Convert to grayscale and resize for better OCR accuracy
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        gray = cv2.resize(gray, None, fx=2, fy=2)
+
+        # Extract text
+        text = pytesseract.image_to_string(gray, config=custom_config).strip()
+
+        return text
 
 
-    # Find contours of white regions (hollow areas)
-    # Find contours of white regions (hollow areas)
-    # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    # result = thresh.copy()
-    # # Fill each contour that represents a hollow area
-    # for contour in contours:
-    #     area = cv2.contourArea(contour)
-        
-    #     # Only fill areas larger than minimum (to avoid noise)
-    #     if area > 1:
-    #         # Create mask for this contour
-    #         mask = np.zeros_like(gray)
-    #         cv2.drawContours(result, [contour], -1, 255, -1)
-            
-    #         # Fill the hollow area with black
-    #         # result[mask == 255] = 0
+def extract(img_path: str = "img/screenshot6.png"):
 
-    
-    cleaned = cv2.resize(cleaned, None, fx=2, fy=2)
-    
-    kernel = np.ones((1, 1), np.uint8)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
-    cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
-    
-    cleaned = cv2.bitwise_not(cleaned)
-
-    # Plot all images
-    # plt.figure(figsize=(12, 4))
-    # plt.subplot(1, 4, 1)
-    # plt.title("Original")
-    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    # plt.axis('off')
-
-    # plt.subplot(1, 4, 2)
-    # plt.title("Grayscale")
-    # plt.imshow(gray, cmap='gray')
-    # plt.axis('off')
-
-    # plt.subplot(1, 4, 3)
-    # plt.title("Thresholded")
-    # plt.imshow(thresh, cmap='gray')
-    # plt.axis('off')
-
-    # plt.subplot(1, 4, 4)
-    # plt.title("Processed")
-    # plt.imshow(cleaned, cmap='gray')
-    # plt.axis('off')
-
-    # plt.tight_layout()
-    # plt.show()
-    
-    return cleaned
-
-def extract_formatted_line(image_path):
-    """
-    Extract formatted line with numbers, colons, dots, and commas
-    """
-    # Preprocess image
-    processed_img = preprocess_line_image(image_path)
-    
-    # Configure Tesseract for your specific character set
-    # Allow digits, colon, period, and comma
-    custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
-    
-    # Extract text
-    text = pytesseract.image_to_string(processed_img, config=custom_config).strip()
-    
-    
-    return text
-
-
-
-def extract(img_path: str = "img/text_line_31.png"):
-    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
     # time.sleep(2)
@@ -426,12 +484,13 @@ def extract(img_path: str = "img/text_line_31.png"):
     # cv2.imwrite("screenshot8.png", img)  # Save the screenshot for reference
     # exit(0)
 
-    # line_detector = DetectTextLines()
+    line_detector = DetectTextLines()
 
-    # image = cv2.imread(img_path)
-    # text_lines = line_detector.detect_price(
-    #     image)
+    image = cv2.imread(img_path)
     
+    text_imgs, _ = line_detector.detect_price(
+        image)
+    cropped, _ = line_detector.detect_price(text_imgs[0], merge=False)
     # exit(0)
     # for i in range(7):
     #     print(f"Processing image {i+1}")
@@ -439,20 +498,61 @@ def extract(img_path: str = "img/text_line_31.png"):
     #     # Detect text lines
     #     text_lines, result_image = line_detector.detect_price(image)
 
-    extracted_text = extract_formatted_line(img_path)
-    print(f"Extracted text: '{extracted_text}'")
-    return extracted_text
+    text_extractor = TextExtractor()
+
+    # extracted_text = text_extractor.extract_text(image)
+    # print(f"Extracted text: '{extracted_text}'")
+    # return extracted_text
+
     # Simple extraction
-    # numbers = extractor.extract("numbers_image.png")
-    # for i in range(17, 0, -1):
-    #     extracted_text = extract_formatted_line(f"text_line_{i}.png")
+    # for i in range(1, 3):
+    #     extracted_text = text_extractor.extract_formatted_line(f"img/text_number_{i}.png")
     #     print(f"Extracted text: '{extracted_text}'")
     #     # break
+    
+    processed_windows = 0
+    while processed_windows < 2:
+        look_for_ratio_stock = True
+        seen_prices = 0
+        for img in text_imgs:
 
-
-
+            if look_for_ratio_stock:
+                extracted_text = text_extractor.extract_text(img)
+                print(f"Extracted text: '{extracted_text}'")
+                if "ratio stock" in extracted_text.lower():
+                    
+                    plt.subplot(1, 1, 1)
+                    plt.title("Thresholded")
+                    plt.imshow(img)
+                    plt.axis('off')
+                    plt.show()
+                    
+                    processed_windows += 1
+                    look_for_ratio_stock = False
+            else:
+                price_and_stock_img, _ = line_detector.detect_price(img, merge=False)
+                price = text_extractor.extract_number(price_and_stock_img[0])
+                stock = text_extractor.extract_number(price_and_stock_img[1])
+                print(f"Extracted price: '{price}', stock: '{stock}'")
+                
+                plt.subplot(1, 1, 1)
+                plt.title("Thresholded")
+                plt.imshow(img)
+                plt.axis('off')
+                plt.show()
+                
+                seen_prices += 1
+                if seen_prices >= 2:
+                    look_for_ratio_stock = True
+                    seen_prices = 0
+                    if processed_windows >= 2:
+                        break
+        else:
+            break
+            
+        # break
 
 # Example usage
 if __name__ == "__main__":
-    
+
     extract()
