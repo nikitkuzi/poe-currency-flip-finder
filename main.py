@@ -153,7 +153,6 @@ class DetectTextLines:
             list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
 
-
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -186,7 +185,6 @@ class DetectTextLines:
         # Sort text lines by their y-coordinate (top to bottom)
         text_boxes.sort(key=lambda rect: rect[1])
 
-        
         # for (x, y, w, h) in text_boxes:
         #     cv2.rectangle(result_image, (x, y),
         #                   (x + w, y + h), (0, 255, 0), 1)
@@ -367,7 +365,7 @@ class TextExtractor:
         # Apply adaptive thresholding
         # gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
         #   cv2.THRESH_BINARY, 55, 21)
- 
+
         # kernel = np.ones((1, 1), np.uint8)
         # gray1 = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
         # gray1 = cv2.morphologyEx(gray1, cv2.MORPH_DILATE, kernel, iterations=2)
@@ -386,14 +384,12 @@ class TextExtractor:
         cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
         # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
 
-        
-
         _, thresh = cv2.threshold(cleaned, 120, 255, cv2.THRESH_BINARY)
         kernel = np.ones((2, 1), np.uint8)
         cleaned = cv2.dilate(thresh, kernel, iterations=2)
-        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel, iterations=2)
-        
-        
+        cleaned = cv2.morphologyEx(
+            cleaned, cv2.MORPH_OPEN, kernel, iterations=2)
+
         cleaned = cv2.bitwise_not(cleaned)
         # cleaned = cv2.bitwise_not(thresh)
 
@@ -418,12 +414,9 @@ class TextExtractor:
         # plt.title("Processed")
         # plt.imshow(cleaned, cmap='gray')
         # plt.axis('off')
-        
+
         # plt.tight_layout()
         # plt.show()
-        
-        
-
 
         return cleaned
 
@@ -463,16 +456,69 @@ class TextExtractor:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2)
 
+        # gray = self.__preprocess_number_image(image)
+
         # Extract text
         text = pytesseract.image_to_string(gray, config=custom_config).strip()
 
         return text
 
+    # def get_price_and_stock(self, images: list[np.ndarray]):
 
-    def get_price_and_stock(self, )
+
+class PriceAndStockExtractor:
+
+    def __init__(self, line_detector: DetectTextLines, text_extractor: TextExtractor):
+        self.line_detector = line_detector
+        self.text_extractor = text_extractor
+
+    def extract_price_and_stock(self, text_images: list[np.ndarray], limit: int = 2) -> list[tuple[str, str]]:
+        prices_and_stocks = []
+        processed_windows = 0
+        look_for_ratio_stock = True
+        seen_prices = 0
+        seen_ratios = 0
+        for img in text_images:
+
+            if look_for_ratio_stock:
+                extracted_text = self.text_extractor.extract_text(img)
+                print(f"Extracted text: '{extracted_text}'")
+                if "stock" in extracted_text.lower():
+                    seen_ratios += 1
+                    prices_and_stocks.append([])
+                    processed_windows += 1
+                    look_for_ratio_stock = False
+            elif seen_ratios > 0 and not look_for_ratio_stock:
+                price_and_stock_img, _ = self.line_detector.detect_price(
+                    img, merge=False)
+                price = self.text_extractor.extract_number(
+                    price_and_stock_img[0])
+                stock = self.text_extractor.extract_number(
+                    price_and_stock_img[1])
+                price = price.replace("::", ":")
+                price = price.replace("..", ".")
+                price = price.replace(":.", ":")
+                price = price.replace(".:", ":")
+                stock = stock.replace(".", ",")
+                print(f"Extracted price: '{price}', stock: '{stock}'")
+
+                if price == "" or stock == "":
+                    processed_windows += 1
+                    look_for_ratio_stock = True
+                    continue
+
+                prices_and_stocks[-1].append((price, stock))
+                seen_prices += 1
+                if seen_prices >= limit or seen_prices >= 6:
+                    look_for_ratio_stock = True
+                    seen_prices = 0
+                    if processed_windows >= 2:
+                        break
+
+        return prices_and_stocks
 
 
-def extract(img_path: str = "img/text_line_52.png"):
+def extract(img_path: str = "img/screenshot7.png"):
 
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
@@ -484,92 +530,27 @@ def extract(img_path: str = "img/text_line_52.png"):
     line_detector = DetectTextLines()
 
     image = cv2.imread(img_path)
-    
+
     text_imgs, _ = line_detector.detect_price(
         image)
-    # cropped, _ = line_detector.detect_price(text_imgs[0], merge=False)
-    # exit(0)
-    # for i in range(7):
-    #     print(f"Processing image {i+1}")
-    #     image = cv2.imread(f"screenshot{i+1}.png")
-    #     # Detect text lines
-    #     text_lines, result_image = line_detector.detect_price(image)
 
     text_extractor = TextExtractor()
-
-    # extracted_text = text_extractor.extract_text(image)
-    # print(f"Extracted text: '{extracted_text}'")
-    # return extracted_text
-
-    # Simple extraction
-    # for i in range(1, 3):
-    #     extracted_text = text_extractor.extract_formatted_line(f"img/text_number_{i}.png")
-    #     print(f"Extracted text: '{extracted_text}'")
-    #     # break
     
-    # processed_windows = 0
-    # while processed_windows < 2:
-    #     look_for_ratio_stock = True
-    #     seen_prices = 0
-    #     for img in text_imgs:
-
-    #         if look_for_ratio_stock:
-    #             extracted_text = text_extractor.extract_text(img)
-    #             print(f"Extracted text: '{extracted_text}'")
-    #             if "ratio stock" in extracted_text.lower():
-                    
-    #                 plt.subplot(1, 1, 1)
-    #                 plt.title("Thresholded")
-    #                 plt.imshow(img)
-    #                 plt.axis('off')
-    #                 plt.show()
-                    
-    #                 processed_windows += 1
-    #                 look_for_ratio_stock = False
-    #         else:
-    #             price_and_stock_img, _ = line_detector.detect_price(img, merge=False)
-    #             price = text_extractor.extract_number(price_and_stock_img[0])
-    #             stock = text_extractor.extract_number(price_and_stock_img[1])
-    #             print(f"Extracted price: '{price}', stock: '{stock}'")
-                
-    #             plt.subplot(1, 1, 1)
-    #             plt.title("Thresholded")
-    #             plt.imshow(img)
-    #             plt.axis('off')
-    #             plt.show()
-                
-    #             seen_prices += 1
-    #             if seen_prices >= 2:
-    #                 look_for_ratio_stock = True
-    #                 seen_prices = 0
-    #                 if processed_windows >= 2:
-    #                     break
-    #     else:
-    #         break
+    price_and_stock_extractor = PriceAndStockExtractor(line_detector, text_extractor)
     
+    prices_and_stocks = price_and_stock_extractor.extract_price_and_stock(text_imgs)
+    for price, stock in prices_and_stocks[0]:
+        print(f"Price: '{price}', Stock: '{stock}'")
+    for price, stock in prices_and_stocks[1]:
+        print(f"Price: '{price}', Stock: '{stock}'")
     
-    
-    price_and_stock_img, _ = line_detector.detect_price(image, merge=False)
-    
-    price, stock = "", ""
-    
-    try:
-        price = text_extractor.extract_number(price_and_stock_img[0])
-    except Exception as e:
-        pass
-    try:
-        stock = text_extractor.extract_number(price_and_stock_img[1])
-    except Exception as e:
-        pass
-    
-    price = price.replace("::", ":")
-    price = price.replace("..", ".")
-    price = price.replace(":.", ":")
-    price = price.replace(".:", ":")
-    stock = stock.replace(".", ",")
-    print(f"Extracted price: '{price}', stock: '{stock}'")
-    return price + " " + stock
-
+    # items,_ = line_detector.detect_items(image)
+    # for img in items:
+    #     text = text_extractor.extract_text(img)
+    #     print(f"Extracted item text: '{text}'")
+        
+        # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+        
 # Example usage
 if __name__ == "__main__":
 
