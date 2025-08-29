@@ -1,5 +1,6 @@
 import time
 import cv2
+import keyboard
 import numpy as np
 import matplotlib.pyplot as plt
 from mss import mss
@@ -566,6 +567,42 @@ class PriceAndStockExtractor:
 
         return prices_and_stocks
 
+
+class MovementHandler:
+    
+    def show_market_window(self, position: tuple[int, int], delay=0.01) -> None:
+        mouse.move(position[0], position[1])
+        time.sleep(delay)
+        keyboard.press("alt")
+        time.sleep(delay)
+    
+    def hide_market_window(self) -> None:
+        keyboard.release("alt")
+        time.sleep(0.01)
+        
+    
+    def __find_item(self, item_name: str) -> None:
+        
+        keyboard.press("ctrl")
+        keyboard.press("f")
+        time.sleep(0.1)
+        keyboard.release("f")
+        keyboard.release("ctrl")
+        
+        keyboard.write(item_name, delay=0.05)
+        
+    def __change_currency(self, currency_name: str) -> None:
+        # load from conf
+        pos = (0, 0)
+        mouse.move(pos[0], pos[1])
+        
+        
+    def change_to_chaos(self) -> None:
+        self.__change_currency("Chaos Orb")
+    def change_to_divine(self) -> None:
+        self.__change_currency("Divine Orb")
+        
+    
 
 def extract(img_path: str = "img/screenshot8.png"):
 
