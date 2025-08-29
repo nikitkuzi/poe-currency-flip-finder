@@ -237,18 +237,20 @@ class DetectTextLines:
 
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
+        gray = cv2.resize(gray, None, fx=2, fy=2)
+        image = cv2.resize(image, None, fx=2, fy=2)
+        
         # Apply Gaussian blur to reduce noise
         blurred: np.ndarray = cv2.GaussianBlur(gray, (7, 7), 0)
 
         # Apply adaptive threshold to get binary image
         binary: np.ndarray = cv2.adaptiveThreshold(
             blurred, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-            cv2.THRESH_BINARY_INV, 3, 5
+            cv2.THRESH_BINARY_INV, 5, 11
         )
 
         # Define a rectangular kernel that is wider than it is tall
-        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 5))
+        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 8))
 
         # Apply dilation to connect text components
         dilated: np.ndarray = cv2.dilate(binary, kernel, iterations=4)
@@ -270,12 +272,45 @@ class DetectTextLines:
         #     cropped = image[y:y+h, x:x+w]
         #     cv2.imwrite(f"text_line_{idx+1}.png", cropped)
 
-        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
+        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
         text_boxes = tmp
 
         text_imgs = [image[y:y+h+5, x:x+w]
                      for (x, y, w, h) in text_boxes]
+        result_image = image.copy()
+        for (x, y, w, h) in text_boxes:
+            cv2.rectangle(result_image, (x, y),
+                          (x + w, y + h), (0, 255, 0), 1)
+        
+        # plt.figure(figsize=(12, 4))
+        # plt.subplot(1, 5, 1)
+        # plt.title("Original")
+        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
 
+        # plt.subplot(1, 5, 2)
+        # plt.title("Grayscale")
+        # plt.imshow(gray, cmap='gray')
+        # plt.axis('off')
+
+        # plt.subplot(1, 5, 3)
+        # plt.title("Thresholded")
+        # plt.imshow(binary, cmap='gray')
+        # plt.axis('off')
+
+        # plt.subplot(1, 5, 4)
+        # plt.title("Processed")
+        # plt.imshow(dilated, cmap='gray')
+        # plt.axis('off')
+
+        # plt.subplot(1, 5, 5)
+        # plt.title("Processed")
+        # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
+        
+        # plt.tight_layout()
+        # plt.show()
+        
         return text_imgs, text_boxes
 
 
@@ -456,10 +491,10 @@ class TextExtractor:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2)
 
-        # gray = self.__preprocess_number_image(image)
+        gray = self.__preprocess_number_image(image)
 
         # Extract text
-        text = pytesseract.image_to_string(gray, config=custom_config).strip()
+        text = pytesseract.image_to_string(gray, config=custom_config).strip().replace('\n', ' ')
 
         return text
 
@@ -518,7 +553,7 @@ class PriceAndStockExtractor:
         return prices_and_stocks
 
 
-def extract(img_path: str = "img/screenshot7.png"):
+def extract(img_path: str = "img/screenshot8.png"):
 
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
@@ -536,20 +571,21 @@ def extract(img_path: str = "img/screenshot7.png"):
 
     text_extractor = TextExtractor()
     
-    price_and_stock_extractor = PriceAndStockExtractor(line_detector, text_extractor)
+    # price_and_stock_extractor = PriceAndStockExtractor(line_detector, text_extractor)
     
-    prices_and_stocks = price_and_stock_extractor.extract_price_and_stock(text_imgs)
-    for price, stock in prices_and_stocks[0]:
-        print(f"Price: '{price}', Stock: '{stock}'")
-    for price, stock in prices_and_stocks[1]:
-        print(f"Price: '{price}', Stock: '{stock}'")
+    # prices_and_stocks = price_and_stock_extractor.extract_price_and_stock(text_imgs)
+    # for price, stock in prices_and_stocks[0]:
+    #     print(f"Price: '{price}', Stock: '{stock}'")
+    # for price, stock in prices_and_stocks[1]:
+    #     print(f"Price: '{price}', Stock: '{stock}'")
     
-    # items,_ = line_detector.detect_items(image)
-    # for img in items:
-    #     text = text_extractor.extract_text(img)
-    #     print(f"Extracted item text: '{text}'")
-        
-        # plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    items,_ = line_detector.detect_items(image)
+    
+    # exit(0)
+    for img in items:
+        text = text_extractor.extract_text(img)
+        print(f"Extracted item text: '{text}'")
+        # break
         
 # Example usage
 if __name__ == "__main__":
