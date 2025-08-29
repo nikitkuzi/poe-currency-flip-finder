@@ -235,6 +235,10 @@ class DetectTextLines:
             list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
 
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
+        
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2)
@@ -275,13 +279,21 @@ class DetectTextLines:
         tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
         text_boxes = tmp
 
+        text_imgs = []
+        boxes = []
+        
+        for (x, y, w, h) in text_boxes:
+            text_imgs.append(image[y:y+h+5, x:x+w])
+            boxes.append((x//2, y//2, w//2, h//2))
+        
         text_imgs = [image[y:y+h+5, x:x+w]
                      for (x, y, w, h) in text_boxes]
-        result_image = image.copy()
-        for (x, y, w, h) in text_boxes:
-            cv2.rectangle(result_image, (x, y),
-                          (x + w, y + h), (0, 255, 0), 1)
         
+        
+        result_image = image.copy()
+        # for (x, y, w, h) in text_boxes:
+        #     cv2.rectangle(result_image, (x, y),
+        #                   (x + w, y + h), (0, 255, 0), 1)
         # plt.figure(figsize=(12, 4))
         # plt.subplot(1, 5, 1)
         # plt.title("Original")
@@ -311,7 +323,8 @@ class DetectTextLines:
         # plt.tight_layout()
         # plt.show()
         
-        return text_imgs, text_boxes
+        # return text_imgs, text_boxes
+        return text_imgs, boxes
 
 
 class ConfigPositions:
@@ -429,29 +442,29 @@ class TextExtractor:
         # cleaned = cv2.bitwise_not(thresh)
 
         # Plot all images
-        plt.figure(figsize=(12, 4))
-        plt.subplot(1, 4, 1)
-        plt.title("Original")
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
+        # plt.figure(figsize=(12, 4))
+        # plt.subplot(1, 4, 1)
+        # plt.title("Original")
+        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
 
-        plt.subplot(1, 4, 2)
-        plt.title("Grayscale")
-        plt.imshow(gray, cmap='gray')
-        plt.axis('off')
+        # plt.subplot(1, 4, 2)
+        # plt.title("Grayscale")
+        # plt.imshow(gray, cmap='gray')
+        # plt.axis('off')
 
-        plt.subplot(1, 4, 3)
-        plt.title("Thresholded")
-        plt.imshow(thresh, cmap='gray')
-        plt.axis('off')
+        # plt.subplot(1, 4, 3)
+        # plt.title("Thresholded")
+        # plt.imshow(thresh, cmap='gray')
+        # plt.axis('off')
 
-        plt.subplot(1, 4, 4)
-        plt.title("Processed")
-        plt.imshow(cleaned, cmap='gray')
-        plt.axis('off')
+        # plt.subplot(1, 4, 4)
+        # plt.title("Processed")
+        # plt.imshow(cleaned, cmap='gray')
+        # plt.axis('off')
 
-        plt.tight_layout()
-        plt.show()
+        # plt.tight_layout()
+        # plt.show()
 
         return cleaned
 
@@ -586,14 +599,18 @@ def extract(img_path: str = "img/screenshot8.png"):
     # plt.axis('off')
     # plt.show()
     
-    items,_ = line_detector.detect_items(image)
+    items, boxes = line_detector.detect_items(image)
     
     # exit(0)
-    for img in items:
+    for img, box in zip(items, boxes):
         text = text_extractor.extract_text(img)
-        print(f"Extracted item text: '{text}'")
+        print(f"Extracted item text: '{text}' at box {box}")
         # break
-        
+    
+    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    plt.axis('off')
+    plt.show()
+    
 # Example usage
 if __name__ == "__main__":
 
