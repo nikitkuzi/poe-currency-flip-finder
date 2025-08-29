@@ -429,29 +429,29 @@ class TextExtractor:
         # cleaned = cv2.bitwise_not(thresh)
 
         # Plot all images
-        # plt.figure(figsize=(12, 4))
-        # plt.subplot(1, 4, 1)
-        # plt.title("Original")
-        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
+        plt.figure(figsize=(12, 4))
+        plt.subplot(1, 4, 1)
+        plt.title("Original")
+        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        plt.axis('off')
 
-        # plt.subplot(1, 4, 2)
-        # plt.title("Grayscale")
-        # plt.imshow(gray, cmap='gray')
-        # plt.axis('off')
+        plt.subplot(1, 4, 2)
+        plt.title("Grayscale")
+        plt.imshow(gray, cmap='gray')
+        plt.axis('off')
 
-        # plt.subplot(1, 4, 3)
-        # plt.title("Thresholded")
-        # plt.imshow(thresh, cmap='gray')
-        # plt.axis('off')
+        plt.subplot(1, 4, 3)
+        plt.title("Thresholded")
+        plt.imshow(thresh, cmap='gray')
+        plt.axis('off')
 
-        # plt.subplot(1, 4, 4)
-        # plt.title("Processed")
-        # plt.imshow(cleaned, cmap='gray')
-        # plt.axis('off')
+        plt.subplot(1, 4, 4)
+        plt.title("Processed")
+        plt.imshow(cleaned, cmap='gray')
+        plt.axis('off')
 
-        # plt.tight_layout()
-        # plt.show()
+        plt.tight_layout()
+        plt.show()
 
         return cleaned
 
@@ -471,7 +471,7 @@ class TextExtractor:
 
         return text
 
-    def extract_text(self, image):
+    def extract_text(self, image, preprocess: bool = False) -> str:
         """
         Extract all text from an image using Tesseract OCR.
 
@@ -489,9 +489,10 @@ class TextExtractor:
         custom_config = r'--oem 3 --psm 6 -l eng'
         # Convert to grayscale and resize for better OCR accuracy
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        gray = cv2.resize(gray, None, fx=2, fy=2)
-
-        gray = self.__preprocess_number_image(image)
+        
+        # gray = cv2.resize(gray, None, fx=2, fy=2)
+        if preprocess:
+            gray = self.__preprocess_number_image(image)
 
         # Extract text
         text = pytesseract.image_to_string(gray, config=custom_config).strip().replace('\n', ' ')
@@ -516,7 +517,7 @@ class PriceAndStockExtractor:
         for img in text_images:
 
             if look_for_ratio_stock:
-                extracted_text = self.text_extractor.extract_text(img)
+                extracted_text = self.text_extractor.extract_text(img, preprocess=False)
                 print(f"Extracted text: '{extracted_text}'")
                 if "stock" in extracted_text.lower():
                     seen_ratios += 1
@@ -558,16 +559,17 @@ def extract(img_path: str = "img/screenshot8.png"):
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
     # time.sleep(2)
-    # img = screenshot_capture.items_window()
-    # cv2.imwrite("screenshot8.png", img)  # Save the screenshot for reference
+    # image = screenshot_capture.price_window()
+    # cv2.imwrite("screenshot9.png", image)  # Save the screenshot for reference
     # exit(0)
 
     line_detector = DetectTextLines()
-
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.axis('off')
+    # plt.show()
     image = cv2.imread(img_path)
 
-    text_imgs, _ = line_detector.detect_price(
-        image)
+    text_imgs, _ = line_detector.detect_price(image)
 
     text_extractor = TextExtractor()
     
@@ -578,6 +580,11 @@ def extract(img_path: str = "img/screenshot8.png"):
     #     print(f"Price: '{price}', Stock: '{stock}'")
     # for price, stock in prices_and_stocks[1]:
     #     print(f"Price: '{price}', Stock: '{stock}'")
+    # exit(0)
+        
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.axis('off')
+    # plt.show()
     
     items,_ = line_detector.detect_items(image)
     
