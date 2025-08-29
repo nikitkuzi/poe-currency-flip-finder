@@ -200,7 +200,7 @@ class DetectTextLines:
         # Merge boxes on the same line
         if merge:
             text_boxes = self.merge_boxes_on_same_line(
-                text_boxes, y_threshold=8, x_overlap_threshold=0.3
+                text_boxes, y_threshold=10, x_overlap_threshold=0.3
             )
 
         # for idx, (x, y, w, h) in enumerate(text_boxes):
@@ -210,11 +210,11 @@ class DetectTextLines:
         text_boxes = tmp
 
         if merge:
-            text_imgs = [image[y:y+h, x:x+w]
+            text_imgs = [image[y:y+h+5, x:x+w]
                          for (x, y, w, h) in text_boxes]
         else:
             text_boxes.sort(key=lambda rect: rect[0])
-            text_imgs = [image[y:, x:x+w]
+            text_imgs = [image[0:, x:x+w]
                          for (x, y, w, h) in text_boxes]
         # for img in text_imgs:
         #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
@@ -275,7 +275,7 @@ class DetectTextLines:
         tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
         text_boxes = tmp
 
-        text_imgs = [image[y:y+h, x:x+w]
+        text_imgs = [image[y:y+h+5, x:x+w]
                      for (x, y, w, h) in text_boxes]
 
         return text_imgs, text_boxes
@@ -361,50 +361,41 @@ class TextExtractor:
 
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
+        gray = cv2.resize(gray, None, fx=3, fy=3)
+        gray = cv2.GaussianBlur(gray, (5, 5), 0)
+        gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
         # Apply adaptive thresholding
-        # thresh = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-        #   cv2.THRESH_BINARY, 11, 1)
-        _, thresh = cv2.threshold(gray, 110, 255, cv2.THRESH_BINARY)
-
+        # gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
+        #   cv2.THRESH_BINARY, 55, 21)
+ 
+        # kernel = np.ones((1, 1), np.uint8)
+        # gray1 = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
+        # gray1 = cv2.morphologyEx(gray1, cv2.MORPH_DILATE, kernel, iterations=2)
+        # plt.imshow(gray1, cmap='gray')
+        # plt.axis('off')
+        # plt.show()
+        # exit(0)
+        # _, thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+        _, thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
+        # thresh = cv2.GaussianBlur(thresh, (5, 5), 0)
+        # thresh = cv2.resize(thresh, None, fx=2, fy=2)
+        # thresh = cv2.fastNlMeansDenoising(thresh, None, 10, 7, 21)
         # Apply morphological operations to clean up
         kernel = np.ones((1, 1), np.uint8)
         cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
-
-        # Invert back to black text on white background
-        # kernel = np.ones((2, 2), np.uint8)
-        # result = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel, iterations=2)
-
-        # kernel = np.ones((1, 1), np.uint8)
         # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
 
-        # result = cv2.morphologyEx(result, cv2.MORPH_OPEN, kernel, iterations=1)
+        
 
-        # Find contours of white regions (hollow areas)
-        # Find contours of white regions (hollow areas)
-        # contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        # result = thresh.copy()
-        # # Fill each contour that represents a hollow area
-        # for contour in contours:
-        #     area = cv2.contourArea(contour)
-
-        #     # Only fill areas larger than minimum (to avoid noise)
-        #     if area > 1:
-        #         # Create mask for this contour
-        #         mask = np.zeros_like(gray)
-        #         cv2.drawContours(result, [contour], -1, 255, -1)
-
-        #         # Fill the hollow area with black
-        #         # result[mask == 255] = 0
-
-        cleaned = cv2.resize(cleaned, None, fx=2, fy=2)
-
-        kernel = np.ones((1, 1), np.uint8)
-        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_CLOSE, kernel)
-        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
-
+        _, thresh = cv2.threshold(cleaned, 120, 255, cv2.THRESH_BINARY)
+        kernel = np.ones((2, 1), np.uint8)
+        cleaned = cv2.dilate(thresh, kernel, iterations=2)
+        cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel, iterations=2)
+        
+        
         cleaned = cv2.bitwise_not(cleaned)
+        # cleaned = cv2.bitwise_not(thresh)
 
         # Plot all images
         # plt.figure(figsize=(12, 4))
@@ -427,9 +418,12 @@ class TextExtractor:
         # plt.title("Processed")
         # plt.imshow(cleaned, cmap='gray')
         # plt.axis('off')
-
+        
         # plt.tight_layout()
         # plt.show()
+        
+        
+
 
         return cleaned
 
@@ -475,7 +469,10 @@ class TextExtractor:
         return text
 
 
-def extract(img_path: str = "img/screenshot6.png"):
+    def get_price_and_stock(self, )
+
+
+def extract(img_path: str = "img/text_line_52.png"):
 
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
@@ -490,7 +487,7 @@ def extract(img_path: str = "img/screenshot6.png"):
     
     text_imgs, _ = line_detector.detect_price(
         image)
-    cropped, _ = line_detector.detect_price(text_imgs[0], merge=False)
+    # cropped, _ = line_detector.detect_price(text_imgs[0], merge=False)
     # exit(0)
     # for i in range(7):
     #     print(f"Processing image {i+1}")
@@ -510,47 +507,68 @@ def extract(img_path: str = "img/screenshot6.png"):
     #     print(f"Extracted text: '{extracted_text}'")
     #     # break
     
-    processed_windows = 0
-    while processed_windows < 2:
-        look_for_ratio_stock = True
-        seen_prices = 0
-        for img in text_imgs:
+    # processed_windows = 0
+    # while processed_windows < 2:
+    #     look_for_ratio_stock = True
+    #     seen_prices = 0
+    #     for img in text_imgs:
 
-            if look_for_ratio_stock:
-                extracted_text = text_extractor.extract_text(img)
-                print(f"Extracted text: '{extracted_text}'")
-                if "ratio stock" in extracted_text.lower():
+    #         if look_for_ratio_stock:
+    #             extracted_text = text_extractor.extract_text(img)
+    #             print(f"Extracted text: '{extracted_text}'")
+    #             if "ratio stock" in extracted_text.lower():
                     
-                    plt.subplot(1, 1, 1)
-                    plt.title("Thresholded")
-                    plt.imshow(img)
-                    plt.axis('off')
-                    plt.show()
+    #                 plt.subplot(1, 1, 1)
+    #                 plt.title("Thresholded")
+    #                 plt.imshow(img)
+    #                 plt.axis('off')
+    #                 plt.show()
                     
-                    processed_windows += 1
-                    look_for_ratio_stock = False
-            else:
-                price_and_stock_img, _ = line_detector.detect_price(img, merge=False)
-                price = text_extractor.extract_number(price_and_stock_img[0])
-                stock = text_extractor.extract_number(price_and_stock_img[1])
-                print(f"Extracted price: '{price}', stock: '{stock}'")
+    #                 processed_windows += 1
+    #                 look_for_ratio_stock = False
+    #         else:
+    #             price_and_stock_img, _ = line_detector.detect_price(img, merge=False)
+    #             price = text_extractor.extract_number(price_and_stock_img[0])
+    #             stock = text_extractor.extract_number(price_and_stock_img[1])
+    #             print(f"Extracted price: '{price}', stock: '{stock}'")
                 
-                plt.subplot(1, 1, 1)
-                plt.title("Thresholded")
-                plt.imshow(img)
-                plt.axis('off')
-                plt.show()
+    #             plt.subplot(1, 1, 1)
+    #             plt.title("Thresholded")
+    #             plt.imshow(img)
+    #             plt.axis('off')
+    #             plt.show()
                 
-                seen_prices += 1
-                if seen_prices >= 2:
-                    look_for_ratio_stock = True
-                    seen_prices = 0
-                    if processed_windows >= 2:
-                        break
-        else:
-            break
-            
-        # break
+    #             seen_prices += 1
+    #             if seen_prices >= 2:
+    #                 look_for_ratio_stock = True
+    #                 seen_prices = 0
+    #                 if processed_windows >= 2:
+    #                     break
+    #     else:
+    #         break
+    
+    
+    
+    price_and_stock_img, _ = line_detector.detect_price(image, merge=False)
+    
+    price, stock = "", ""
+    
+    try:
+        price = text_extractor.extract_number(price_and_stock_img[0])
+    except Exception as e:
+        pass
+    try:
+        stock = text_extractor.extract_number(price_and_stock_img[1])
+    except Exception as e:
+        pass
+    
+    price = price.replace("::", ":")
+    price = price.replace("..", ".")
+    price = price.replace(":.", ":")
+    price = price.replace(".:", ":")
+    stock = stock.replace(".", ",")
+    print(f"Extracted price: '{price}', stock: '{stock}'")
+    return price + " " + stock
 
 # Example usage
 if __name__ == "__main__":
