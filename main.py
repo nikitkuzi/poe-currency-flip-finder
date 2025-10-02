@@ -1,3 +1,4 @@
+import logging
 import time
 import cv2
 import keyboard
@@ -7,6 +8,7 @@ from mss import mss
 import json
 import mouse
 import pytesseract
+
 
 
 class ScreenCapture:
@@ -105,16 +107,16 @@ class DetectTextLines:
                 current_line.append(box)
             else:
                 # Merge boxes in current line
-                merged_boxes.append(self.merge_line_boxes(current_line))
+                merged_boxes.append(self.__merge_line_boxes(current_line))
                 current_line = [box]
 
         # Add the last line
         if current_line:
-            merged_boxes.append(self.merge_line_boxes(current_line))
+            merged_boxes.append(self.__merge_line_boxes(current_line))
 
         return merged_boxes
 
-    def merge_line_boxes(
+    def __merge_line_boxes(
         self,
         line_boxes: list[tuple[int, int, int, int]]
     ) -> tuple[int, int, int, int] | None:
@@ -239,12 +241,12 @@ class DetectTextLines:
         plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
         plt.axis('off')
         plt.show()
-        
+
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=2, fy=2)
         image = cv2.resize(image, None, fx=2, fy=2)
-        
+
         # Apply Gaussian blur to reduce noise
         blurred: np.ndarray = cv2.GaussianBlur(gray, (7, 7), 0)
 
@@ -277,20 +279,20 @@ class DetectTextLines:
         #     cropped = image[y:y+h, x:x+w]
         #     cv2.imwrite(f"text_line_{idx+1}.png", cropped)
 
-        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
+        tmp = [(x, y, w, h)
+               for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
         text_boxes = tmp
 
         text_imgs = []
         boxes = []
-        
+
         for (x, y, w, h) in text_boxes:
             text_imgs.append(image[y:y+h+5, x:x+w])
             boxes.append((x//2, y//2, w//2, h//2))
-        
+
         text_imgs = [image[y:y+h+5, x:x+w]
                      for (x, y, w, h) in text_boxes]
-        
-        
+
         result_image = image.copy()
         # for (x, y, w, h) in text_boxes:
         #     cv2.rectangle(result_image, (x, y),
@@ -320,10 +322,10 @@ class DetectTextLines:
         # plt.title("Processed")
         # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
         # plt.axis('off')
-        
+
         # plt.tight_layout()
         # plt.show()
-        
+
         # return text_imgs, text_boxes
         return text_imgs, boxes
 
@@ -376,7 +378,7 @@ class ConfigPositions:
             self.config[key] = (x, y)
         self.__save_config()
 
-    def get_position(self, key: str) -> tuple[int, int] | None:
+    def get_position(self, key: str) -> tuple[int, int]:
         """
         Retrieve the screen position for a given key.
 
@@ -386,7 +388,11 @@ class ConfigPositions:
         Returns:
             tuple or None: (x, y) coordinates if found, else None.
         """
-        return self.config.get(key, None)
+        try:
+            return self.config[key]
+        except KeyError:
+            logger.error(f"Key '{key}' not found in configuration.")
+            raise KeyError(f"Key '{key}' not found in configuration.")
 
 
 class TextExtractor:
@@ -503,13 +509,14 @@ class TextExtractor:
         custom_config = r'--oem 3 --psm 6 -l eng'
         # Convert to grayscale and resize for better OCR accuracy
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
+
         # gray = cv2.resize(gray, None, fx=2, fy=2)
         if preprocess:
             gray = self.__preprocess_number_image(image)
 
         # Extract text
-        text = pytesseract.image_to_string(gray, config=custom_config).strip().replace('\n', ' ')
+        text = pytesseract.image_to_string(
+            gray, config=custom_config).strip().replace('\n', ' ')
 
         return text
 
@@ -531,7 +538,8 @@ class PriceAndStockExtractor:
         for img in text_images:
 
             if look_for_ratio_stock:
-                extracted_text = self.text_extractor.extract_text(img, preprocess=False)
+                extracted_text = self.text_extractor.extract_text(
+                    img, preprocess=False)
                 print(f"Extracted text: '{extracted_text}'")
                 if "stock" in extracted_text.lower():
                     seen_ratios += 1
@@ -569,40 +577,59 @@ class PriceAndStockExtractor:
 
 
 class MovementHandler:
-    
-    def show_market_window(self, position: tuple[int, int], delay=0.01) -> None:
-        mouse.move(position[0], position[1])
+
+    def __init__(self, price_and_stock_extractor: PriceAndStockExtractor, config: ConfigPositions) -> None:
+        self.config = config
+        self.pse = price_and_stock_extractor
+
+    def __show_market_window(self, delay=0.01) -> None:
+
+        mouse.move(*self.config.get_position("Market_mid"))
         time.sleep(delay)
         keyboard.press("alt")
         time.sleep(delay)
-    
-    def hide_market_window(self) -> None:
+
+    def __hide_market_window(self) -> None:
         keyboard.release("alt")
         time.sleep(0.01)
-        
-    
+
     def __find_item(self, item_name: str) -> None:
-        
+
         keyboard.press("ctrl")
         keyboard.press("f")
         time.sleep(0.1)
         keyboard.release("f")
         keyboard.release("ctrl")
-        
-        keyboard.write(item_name, delay=0.05)
-        
+
+        keyboard.write(item_name)
+
+        # find first position of first matching item
+
     def __change_currency(self, currency_name: str) -> None:
-        # load from conf
-        pos = (0, 0)
+        # load from conf position of have box
+        pos = self.config.get_position("I_have_name")
+        # click on have box
         mouse.move(pos[0], pos[1])
-        
-        
+        mouse.click(button='left')
+        time.sleep(0.01)
+        self.__find_item(currency_name)
+
     def change_to_chaos(self) -> None:
         self.__change_currency("Chaos Orb")
+
     def change_to_divine(self) -> None:
         self.__change_currency("Divine Orb")
-        
-    
+
+    # todo
+    def change_wanted_item(self, item_name: str) -> None:
+        # load from conf position of want box
+        pos = (0, 0)
+        # click on want box
+        mouse.move(pos[0], pos[1])
+        mouse.click(button='left')
+        time.sleep(0.01)
+        self.__find_item(item_name)
+
 
 def extract(img_path: str = "img/screenshot8.png"):
 
@@ -622,33 +649,56 @@ def extract(img_path: str = "img/screenshot8.png"):
     text_imgs, _ = line_detector.detect_price(image)
 
     text_extractor = TextExtractor()
-    
+
     # price_and_stock_extractor = PriceAndStockExtractor(line_detector, text_extractor)
-    
+
     # prices_and_stocks = price_and_stock_extractor.extract_price_and_stock(text_imgs)
     # for price, stock in prices_and_stocks[0]:
     #     print(f"Price: '{price}', Stock: '{stock}'")
     # for price, stock in prices_and_stocks[1]:
     #     print(f"Price: '{price}', Stock: '{stock}'")
     # exit(0)
-        
+
     # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
     # plt.axis('off')
     # plt.show()
-    
-    items, boxes = line_detector.detect_items(image)
-    
-    # exit(0)
-    for img, box in zip(items, boxes):
-        text = text_extractor.extract_text(img)
-        print(f"Extracted item text: '{text}' at box {box}")
-        # break
-    
-    plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-    plt.axis('off')
-    plt.show()
-    
+
+    # items, boxes = line_detector.detect_items(image)
+
+    # # exit(0)
+    # for img, box in zip(items, boxes):
+    #     text = text_extractor.extract_text(img)
+    #     print(f"Extracted item text: '{text}' at box {box}")
+    #     # break
+
+    # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+    # plt.axis('off')
+    # plt.show()
+
+    # usage
+    # input
+    # items = ["Scarab of Risk", "Fine delirium Orb"]
+    # return
+    # imtes_with_prices = {item_name: {currency: (price, stock)}}
+
+    # TODO:
+    # steps
+    # find_wanted_item
+    # change_currency
+    # show_market_window
+    # extract price and stock
+    # hide_market_window
+    # change_currency
+    # show_market_window
+    # extract price and stock
+    # hide_market_window
+
+    # return items_with_prices
+
+
 # Example usage
 if __name__ == "__main__":
-
+    logger = logging
+    logger.basicConfig(filename='log.log', level=logging.DEBUG,
+                       format='%(levelname)s: %(name)s - %(asctime)s - %(message)s', datefmt='%d/%b/%y %H:%M:%S')
     extract()
