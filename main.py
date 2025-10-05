@@ -10,12 +10,76 @@ import mouse
 import pytesseract
 
 
+class ConfigPositions:
+    """
+    Handles loading, saving, and updating screen position configurations
+    from a JSON file for use in screen capture and automation tasks.
+    """
+
+    def __init__(self, config_file: str = "currency-exchange-config.json") -> None:
+        """
+        Initialize the ConfigPositions object.
+
+        Args:
+            config_file (str): Path to the configuration JSON file.
+        """
+        self.config_file: str = config_file
+        self.config: dict[str, tuple[int, int]] = {}
+        self.load_config()
+
+    def load_config(self) -> None:
+        """
+        Load configuration from the JSON file.
+        If the file does not exist, initializes with an empty config.
+        """
+        try:
+            with open(self.config_file, "r") as f:
+                self.config = json.load(f)
+        except FileNotFoundError:
+            self.config = {}
+
+    def __save_config(self) -> None:
+        """
+        Save the current configuration to the JSON file.
+        """
+        with open(self.config_file, "w") as f:
+            json.dump(self.config, f, indent=4)
+
+    def set_position(self) -> None:
+        """
+        Interactively set screen positions for each key in the config.
+        Prompts the user to right-click at the desired position for each key,
+        then saves the coordinates.
+        """
+        for key, _ in self.config.items():
+            print(f"right click at the position of {key}")
+            mouse.wait(button='right', target_types=('up'))
+            x, y = mouse.get_position()
+            self.config[key] = (x, y)
+        self.__save_config()
+
+    def get_position(self, key: str) -> tuple[int, int]:
+        """
+        Retrieve the screen position for a given key.
+
+        Args:
+            key (str): The configuration key.
+
+        Returns:
+            tuple or None: (x, y) coordinates if found, else None.
+        """
+        try:
+            return self.config[key]
+        except KeyError:
+            logger.error(f"Key '{key}' not found in configuration.")
+            raise KeyError(f"Key '{key}' not found in configuration.")
+
 
 class ScreenCapture:
     """Handles screen capturing of specified regions based on configuration.
     """
 
-    def __init__(self, config):
+    def __init__(self, config: ConfigPositions) -> None:
         # load positions from config
         resolution = config.get_position("Resolution")
         market_right = config.get_position("Market_right")
@@ -29,7 +93,7 @@ class ScreenCapture:
         self.items = {"top": items_top_left[1], "left": items_top_left[0],
                       "width": items_bottom_right[0]-items_top_left[0], "height": items_bottom_right[1]-items_top_left[1]}
 
-    def take_screenshot(self, target: dict) -> np.ndarray:
+    def __take_screenshot(self, target: dict) -> np.ndarray:
         """Takse a screenshot of the specified region.
 
         Args:
@@ -54,16 +118,16 @@ class ScreenCapture:
         Returns:
             np.ndarray: Captured image in OpenCV format.
         """
-        return self.take_screenshot(self.items)
+        return self.__take_screenshot(self.items)
 
     def price_window(self) -> np.ndarray:
-        """Call
+        """Call take_screenshot for price window.
 
 
         Returns:
             np.ndarray: Captured image in OpenCV format.
         """
-        return self.take_screenshot(self.price)
+        return self.__take_screenshot(self.price)
 
 
 class DetectTextLines:
@@ -235,12 +299,13 @@ class DetectTextLines:
             display_process (bool): Whether to display intermediate processing steps.
 
         Returns:
+            list: List of cropped images for detected text lines.
             list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
 
-        plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        plt.axis('off')
-        plt.show()
+        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+        # plt.axis('off')
+        # plt.show()
 
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -328,71 +393,6 @@ class DetectTextLines:
 
         # return text_imgs, text_boxes
         return text_imgs, boxes
-
-
-class ConfigPositions:
-    """
-    Handles loading, saving, and updating screen position configurations
-    from a JSON file for use in screen capture and automation tasks.
-    """
-
-    def __init__(self, config_file: str = "currency-exchange-config.json") -> None:
-        """
-        Initialize the ConfigPositions object.
-
-        Args:
-            config_file (str): Path to the configuration JSON file.
-        """
-        self.config_file: str = config_file
-        self.config: dict[str, tuple[int, int]] = {}
-        self.load_config()
-
-    def load_config(self) -> None:
-        """
-        Load configuration from the JSON file.
-        If the file does not exist, initializes with an empty config.
-        """
-        try:
-            with open(self.config_file, "r") as f:
-                self.config = json.load(f)
-        except FileNotFoundError:
-            self.config = {}
-
-    def __save_config(self) -> None:
-        """
-        Save the current configuration to the JSON file.
-        """
-        with open(self.config_file, "w") as f:
-            json.dump(self.config, f, indent=4)
-
-    def set_position(self) -> None:
-        """
-        Interactively set screen positions for each key in the config.
-        Prompts the user to right-click at the desired position for each key,
-        then saves the coordinates.
-        """
-        for key, _ in self.config.items():
-            print(f"right click at the position of {key}")
-            mouse.wait(button='right', target_types=('up'))
-            x, y = mouse.get_position()
-            self.config[key] = (x, y)
-        self.__save_config()
-
-    def get_position(self, key: str) -> tuple[int, int]:
-        """
-        Retrieve the screen position for a given key.
-
-        Args:
-            key (str): The configuration key.
-
-        Returns:
-            tuple or None: (x, y) coordinates if found, else None.
-        """
-        try:
-            return self.config[key]
-        except KeyError:
-            logger.error(f"Key '{key}' not found in configuration.")
-            raise KeyError(f"Key '{key}' not found in configuration.")
 
 
 class TextExtractor:
@@ -520,8 +520,6 @@ class TextExtractor:
 
         return text
 
-    # def get_price_and_stock(self, images: list[np.ndarray]):
-
 
 class PriceAndStockExtractor:
 
@@ -578,9 +576,12 @@ class PriceAndStockExtractor:
 
 class MovementHandler:
 
-    def __init__(self, price_and_stock_extractor: PriceAndStockExtractor, config: ConfigPositions) -> None:
+    def __init__(self, config: ConfigPositions) -> None:
         self.config = config
-        self.pse = price_and_stock_extractor
+        self.detector = DetectTextLines()
+        self.text_extractor = TextExtractor()
+        self.screen_capture = ScreenCapture(config)
+        self.pse = PriceAndStockExtractor(self.detector, self.text_extractor)
 
     def __show_market_window(self, delay=0.01) -> None:
 
@@ -594,7 +595,7 @@ class MovementHandler:
         time.sleep(0.01)
 
     def __find_item(self, item_name: str) -> None:
-
+        """Finds item in the items window and clicks on it."""
         keyboard.press("ctrl")
         keyboard.press("f")
         time.sleep(0.1)
@@ -602,33 +603,50 @@ class MovementHandler:
         keyboard.release("ctrl")
 
         keyboard.write(item_name)
-
-        # find first position of first matching item
-
-    def __change_currency(self, currency_name: str) -> None:
-        # load from conf position of have box
-        pos = self.config.get_position("I_have_name")
-        # click on have box
-        mouse.move(pos[0], pos[1])
-        mouse.click(button='left')
-        time.sleep(0.01)
-        self.__find_item(currency_name)
-
-    def change_to_chaos(self) -> None:
-        self.__change_currency("Chaos Orb")
-
-    def change_to_divine(self) -> None:
-        self.__change_currency("Divine Orb")
+        time.sleep(0.1)
+        # screenshot items window
+        # detect text lines
+        # find first matching item name
+        # click it with offset
+        
+        item_window = self.screen_capture.items_window()
+        item_imgs, boxes = self.detector.detect_items(item_window)
+        for img, box in zip(item_imgs, boxes):
+            text = self.text_extractor.extract_text(img)
+            print(f"Extracted item text: '{text}' at box {box}")
+            if item_name.lower() in text.lower():
+                # click on the item
+                pos = self.config.get_position("Items_top_left")
+                x = pos[0] + box[0] + box[2] // 2
+                y = pos[1] + box[1] + box[3] // 2
+                mouse.move(x, y)
+                time.sleep(0.01)
+                mouse.click(button='left')
+                time.sleep(0.01)
+                break
+        
+        
 
     # todo
-    def change_wanted_item(self, item_name: str) -> None:
+
+    def change_item(self, item_name: str, wanted=True) -> None:
         # load from conf position of want box
-        pos = (0, 0)
+        if wanted:
+            pos = self.config.get_position("I_want_name")
+        else:
+            pos = self.config.get_position("I_have_name")
         # click on want box
         mouse.move(pos[0], pos[1])
+        time.sleep(0.01)
         mouse.click(button='left')
         time.sleep(0.01)
         self.__find_item(item_name)
+
+    def __change_to_chaos(self) -> None:
+        self.change_item("Chaos Orb", wanted=False)
+
+    def __change_to_divine(self) -> None:
+        self.change_item("Divine Orb", wanted=False)
 
 
 def extract(img_path: str = "img/screenshot8.png"):
@@ -696,8 +714,14 @@ def extract(img_path: str = "img/screenshot8.png"):
     # return items_with_prices
 
 
+    mv = MovementHandler(ConfigPositions())
+    mv.change_item("Chaos orb", wanted=False)
+    time.sleep(1)
+    mv.change_item("Divine orb", wanted=False)
+
 # Example usage
 if __name__ == "__main__":
+    time.sleep(2)
     logger = logging
     logger.basicConfig(filename='log.log', level=logging.DEBUG,
                        format='%(levelname)s: %(name)s - %(asctime)s - %(message)s', datefmt='%d/%b/%y %H:%M:%S')
