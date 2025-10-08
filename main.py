@@ -84,11 +84,12 @@ class ScreenCapture:
         resolution = config.get_position("Resolution")
         market_right = config.get_position("Market_right")
         market_left = config.get_position("Market_left")
+        market_bottom_right = config.get_position("Market_bottom_right")
         items_top_left = config.get_position("Items_top_left")
         items_bottom_right = config.get_position("Items_bottom_right")
         # Define the region to capture (top, left, width, height)
         self.price = {"top": market_left[1], "left": market_left[0],
-                      "width": market_right[0]-market_left[0], "height": items_bottom_right[1]-market_right[1]}
+                      "width": market_right[0]-market_left[0], "height": market_bottom_right[1]-market_right[1]}
 
         self.items = {"top": items_top_left[1], "left": items_top_left[0],
                       "width": items_bottom_right[0]-items_top_left[0], "height": items_bottom_right[1]-items_top_left[1]}
@@ -583,8 +584,9 @@ class MovementHandler:
         self.screen_capture = ScreenCapture(config)
         self.pse = PriceAndStockExtractor(self.detector, self.text_extractor)
 
-    def __show_market_window(self, delay=0.1) -> None:
+    def __show_market_window(self, delay=0.05) -> None:
 
+        mouse.move(0, 0)
         mouse.move(*self.config.get_position("Market_mid"))
         time.sleep(delay)
         keyboard.press("alt")
@@ -608,7 +610,7 @@ class MovementHandler:
         # detect text lines
         # find first matching item name
         # click it with offset
-        
+
         item_window = self.screen_capture.items_window()
         time.sleep(0.1)
         item_imgs, boxes = self.detector.detect_items(item_window)
@@ -626,8 +628,6 @@ class MovementHandler:
                 mouse.click(button='left')
                 time.sleep(0.01)
                 break
-        
-        
 
     # todo
 
@@ -649,13 +649,29 @@ class MovementHandler:
 
     def __change_to_divine(self) -> None:
         self.change_item("Divine Orb", wanted=False)
-        
+
     def show(self) -> None:
         self.__show_market_window()
         time.sleep(0.5)
         self.__hide_market_window()
-
-
+        
+    def __extract(self, item_name: str) -> list[tuple[str, str]]:
+        self.__change_to_chaos()
+        self.__show_market_window()
+        time.sleep(0.3)
+        market_window = self.screen_capture.price_window()
+        price_imgs, _ = self.detector.detect_price(market_window)
+        prices_and_stock = self.pse.extract_price_and_stock(price_imgs)
+        self.__hide_market_window()
+        time.sleep(0.01)
+        return prices_and_stock
+    
+    def extract_price(self) -> dict[str, list[tuple[str, str]]]:
+        prices_with_stock = {}
+        prices_with_stock["Chaos Orb"] = self.__extract("Chaos Orb")
+        prices_with_stock["Divine Orb"] = self.__extract("Divine Orb")
+        return prices_with_stock
+        
 def extract(img_path: str = "img/screenshot8.png"):
 
     # conf = ConfigPositions()
@@ -720,16 +736,18 @@ def extract(img_path: str = "img/screenshot8.png"):
 
     # return items_with_prices
 
-
     mv = MovementHandler(ConfigPositions())
     mv.change_item("Exalted Orb")
     # mv.change_item("Delirium Scarab of Paranoia")
     time.sleep(1)
     # mv.change_item("Chaos orb", wanted=False)
     # time.sleep(1)
-    mv.change_item("Divine orb", wanted=False)
-    time.sleep(1)
-    mv.show()
+    # mv.change_item("Divine orb", wanted=False)
+    # time.sleep(1)
+    # mv.show()
+    prices = mv.extract_price()
+    print(prices)
+
 
 # Example usage
 if __name__ == "__main__":
