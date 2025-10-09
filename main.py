@@ -234,7 +234,8 @@ class DetectTextLines:
         )
 
         # Define a rectangular kernel that is wider than it is tall
-        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+        # kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
+        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 3))
 
         # Apply dilation to connect text components
         dilated: np.ndarray = cv2.dilate(binary, kernel, iterations=3)
@@ -252,10 +253,10 @@ class DetectTextLines:
 
         # Sort text lines by their y-coordinate (top to bottom)
         text_boxes.sort(key=lambda rect: rect[1])
-
-        # for (x, y, w, h) in text_boxes:
-        #     cv2.rectangle(result_image, (x, y),
-        #                   (x + w, y + h), (0, 255, 0), 1)
+        result_image = image.copy()
+        for (x, y, w, h) in text_boxes:
+            cv2.rectangle(result_image, (x, y),
+                          (x + w, y + h), (0, 255, 0), 1)
 
         # plt.subplot(2, 3, 1)
         # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
@@ -343,7 +344,8 @@ class DetectTextLines:
         text_boxes.sort(key=lambda rect: rect[1])
         # for idx, (x, y, w, h) in enumerate(text_boxes):
         #     cropped = image[y:y+h, x:x+w]
-        #     cv2.imwrite(f"text_line_{idx+1}.png", cropped)
+        #     # cv2.imwrite(f"img/text_line_{idx+1}.png", cropped)
+        #     cv2.imwrite(f"img/text_line_{56+idx}.png", cropped)
 
         tmp = [(x, y, w, h)
                for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
@@ -586,7 +588,7 @@ class MovementHandler:
 
     def __show_market_window(self, delay=0.05) -> None:
 
-        mouse.move(0, 0)
+        mouse.move(10, 10)
         mouse.move(*self.config.get_position("Market_mid"))
         time.sleep(delay)
         keyboard.press("alt")
@@ -654,9 +656,12 @@ class MovementHandler:
         self.__show_market_window()
         time.sleep(0.5)
         self.__hide_market_window()
-        
+
     def __extract(self, item_name: str) -> list[tuple[str, str]]:
-        self.__change_to_chaos()
+        if item_name == "Chaos Orb":
+            self.__change_to_chaos()
+        else:
+            self.__change_to_divine()
         self.__show_market_window()
         time.sleep(0.3)
         market_window = self.screen_capture.price_window()
@@ -665,14 +670,19 @@ class MovementHandler:
         self.__hide_market_window()
         time.sleep(0.01)
         return prices_and_stock
-    
+
     def extract_price(self) -> dict[str, list[tuple[str, str]]]:
         prices_with_stock = {}
         prices_with_stock["Chaos Orb"] = self.__extract("Chaos Orb")
         prices_with_stock["Divine Orb"] = self.__extract("Divine Orb")
         return prices_with_stock
-        
-def extract(img_path: str = "img/screenshot8.png"):
+
+    def extract_chaos_to_divine_ratio(self) -> list[tuple[str, str]]:
+        self.__change_to_divine()
+        return self.__extract("Chaos Orb")
+
+
+def extract(img_path: str = "img/screenshot2.png"):
 
     # conf = ConfigPositions()
     # screenshot_capture = ScreenCapture(conf)
@@ -688,10 +698,12 @@ def extract(img_path: str = "img/screenshot8.png"):
     image = cv2.imread(img_path)
 
     text_imgs, _ = line_detector.detect_price(image)
+    # exit(0)
 
     text_extractor = TextExtractor()
 
-    # price_and_stock_extractor = PriceAndStockExtractor(line_detector, text_extractor)
+    price_and_stock_extractor = PriceAndStockExtractor(
+        line_detector, text_extractor)
 
     # prices_and_stocks = price_and_stock_extractor.extract_price_and_stock(text_imgs)
     # for price, stock in prices_and_stocks[0]:
@@ -706,7 +718,7 @@ def extract(img_path: str = "img/screenshot8.png"):
 
     # items, boxes = line_detector.detect_items(image)
 
-    # # exit(0)
+    # # # exit(0)
     # for img, box in zip(items, boxes):
     #     text = text_extractor.extract_text(img)
     #     print(f"Extracted item text: '{text}' at box {box}")
@@ -722,31 +734,18 @@ def extract(img_path: str = "img/screenshot8.png"):
     # return
     # imtes_with_prices = {item_name: {currency: (price, stock)}}
 
-    # TODO:
-    # steps
-    # find_wanted_item
-    # change_currency
-    # show_market_window
-    # extract price and stock
-    # hide_market_window
-    # change_currency
-    # show_market_window
-    # extract price and stock
-    # hide_market_window
-
-    # return items_with_prices
-
-    mv = MovementHandler(ConfigPositions())
-    mv.change_item("Exalted Orb")
-    # mv.change_item("Delirium Scarab of Paranoia")
-    time.sleep(1)
-    # mv.change_item("Chaos orb", wanted=False)
+    # mv = MovementHandler(ConfigPositions())
+    # mv.change_item("Exalted Orb")
+    # # mv.change_item("Delirium Scarab of Paranoia")
     # time.sleep(1)
-    # mv.change_item("Divine orb", wanted=False)
-    # time.sleep(1)
-    # mv.show()
-    prices = mv.extract_price()
-    print(prices)
+    # # mv.change_item("Chaos orb", wanted=False)
+    # # time.sleep(1)
+    # # mv.change_item("Divine orb", wanted=False)
+    # # time.sleep(1)
+    # # mv.show()
+    # prices = mv.extract_price()
+    # print(prices)
+    print(1_344)
 
 
 # Example usage
