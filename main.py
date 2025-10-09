@@ -76,11 +76,17 @@ class ConfigPositions:
 
 
 class ScreenCapture:
-    """Handles screen capturing of specified regions based on configuration.
+    """
+    Handles screen capturing of specified regions based on configuration.
     """
 
     def __init__(self, config: ConfigPositions) -> None:
-        # load positions from config
+        """
+        Initialize ScreenCapture with positions from config.
+
+        Args:
+            config (ConfigPositions): Configuration object with screen positions.
+        """
         resolution = config.get_position("Resolution")
         market_right = config.get_position("Market_right")
         market_left = config.get_position("Market_left")
@@ -95,7 +101,8 @@ class ScreenCapture:
                       "width": items_bottom_right[0]-items_top_left[0], "height": items_bottom_right[1]-items_top_left[1]}
 
     def __take_screenshot(self, target: dict) -> np.ndarray:
-        """Takse a screenshot of the specified region.
+        """
+        Take a screenshot of the specified region.
 
         Args:
             target (dict): Region to capture with keys 'top', 'left', 'width', 'height'.
@@ -104,17 +111,14 @@ class ScreenCapture:
             np.ndarray: Captured image in OpenCV format.
         """
         with mss() as sct:
-            # Capture screen
             screenshot = sct.grab(target)
-
-            # Convert to OpenCV format
             img = np.array(screenshot)
             img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
-
         return img
 
     def items_window(self) -> np.ndarray:
-        """Calls take_screenshot for items window.
+        """
+        Capture the items window region.
 
         Returns:
             np.ndarray: Captured image in OpenCV format.
@@ -122,8 +126,8 @@ class ScreenCapture:
         return self.__take_screenshot(self.items)
 
     def price_window(self) -> np.ndarray:
-        """Call take_screenshot for price window.
-
+        """
+        Capture the price window region.
 
         Returns:
             np.ndarray: Captured image in OpenCV format.
@@ -215,10 +219,11 @@ class DetectTextLines:
 
         Args:
             image (np.ndarray): Input image in OpenCV format.
-            display_process (bool): Whether to display intermediate processing steps.
+            merge (bool): Whether to merge boxes on the same line.
 
         Returns:
-            list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
+            tuple: List of cropped images for detected text lines,
+                   List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
 
         # Convert to grayscale
@@ -234,7 +239,6 @@ class DetectTextLines:
         )
 
         # Define a rectangular kernel that is wider than it is tall
-        # kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (15, 3))
         kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 3))
 
         # Apply dilation to connect text components
@@ -253,16 +257,6 @@ class DetectTextLines:
 
         # Sort text lines by their y-coordinate (top to bottom)
         text_boxes.sort(key=lambda rect: rect[1])
-        result_image = image.copy()
-        for (x, y, w, h) in text_boxes:
-            cv2.rectangle(result_image, (x, y),
-                          (x + w, y + h), (0, 255, 0), 1)
-
-        # plt.subplot(2, 3, 1)
-        # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
-        # plt.title('Detected Text Lines')
-        # plt.axis('off')
-        # plt.show()
 
         # Merge boxes on the same line
         if merge:
@@ -270,11 +264,8 @@ class DetectTextLines:
                 text_boxes, y_threshold=10, x_overlap_threshold=0.3
             )
 
-        # for idx, (x, y, w, h) in enumerate(text_boxes):
-        #     cropped = image[y:, x:x+w]
-        #     cv2.imwrite(f"img/text_number_{idx+1}.png", cropped)
-        tmp = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
-        text_boxes = tmp
+        # Filter out boxes that are too small
+        text_boxes = [(x, y, w, h) for (x, y, w, h) in text_boxes if h > 10]
 
         if merge:
             text_imgs = [image[y:y+h+5, x:x+w]
@@ -283,10 +274,6 @@ class DetectTextLines:
             text_boxes.sort(key=lambda rect: rect[0])
             text_imgs = [image[0:, x:x+w]
                          for (x, y, w, h) in text_boxes]
-        # for img in text_imgs:
-        #     plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-        #     plt.axis('off')
-        #     plt.show()
         return text_imgs, text_boxes
 
     def detect_items(
@@ -298,16 +285,11 @@ class DetectTextLines:
 
         Args:
             image (np.ndarray): Input image in OpenCV format.
-            display_process (bool): Whether to display intermediate processing steps.
 
         Returns:
-            list: List of cropped images for detected text lines.
-            list: List of bounding rectangles for detected text lines in (x, y, w, h) format.
+            tuple: List of cropped images for detected text lines,
+                   List of bounding rectangles for detected text lines in (x, y, w, h) format.
         """
-
-        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
-        # plt.show()
 
         # Convert to grayscale
         gray: np.ndarray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -342,14 +324,10 @@ class DetectTextLines:
 
         # Sort text lines by their y-coordinate (top to bottom)
         text_boxes.sort(key=lambda rect: rect[1])
-        # for idx, (x, y, w, h) in enumerate(text_boxes):
-        #     cropped = image[y:y+h, x:x+w]
-        #     # cv2.imwrite(f"img/text_line_{idx+1}.png", cropped)
-        #     cv2.imwrite(f"img/text_line_{56+idx}.png", cropped)
 
-        tmp = [(x, y, w, h)
-               for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
-        text_boxes = tmp
+        # Filter out boxes that are too small or have too little area
+        text_boxes = [(x, y, w, h)
+                      for (x, y, w, h) in text_boxes if h > 10 and w*h > 3000]
 
         text_imgs = []
         boxes = []
@@ -361,40 +339,6 @@ class DetectTextLines:
         text_imgs = [image[y:y+h+5, x:x+w]
                      for (x, y, w, h) in text_boxes]
 
-        result_image = image.copy()
-        # for (x, y, w, h) in text_boxes:
-        #     cv2.rectangle(result_image, (x, y),
-        #                   (x + w, y + h), (0, 255, 0), 1)
-        # plt.figure(figsize=(12, 4))
-        # plt.subplot(1, 5, 1)
-        # plt.title("Original")
-        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
-
-        # plt.subplot(1, 5, 2)
-        # plt.title("Grayscale")
-        # plt.imshow(gray, cmap='gray')
-        # plt.axis('off')
-
-        # plt.subplot(1, 5, 3)
-        # plt.title("Thresholded")
-        # plt.imshow(binary, cmap='gray')
-        # plt.axis('off')
-
-        # plt.subplot(1, 5, 4)
-        # plt.title("Processed")
-        # plt.imshow(dilated, cmap='gray')
-        # plt.axis('off')
-
-        # plt.subplot(1, 5, 5)
-        # plt.title("Processed")
-        # plt.imshow(cv2.cvtColor(result_image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
-
-        # plt.tight_layout()
-        # plt.show()
-
-        # return text_imgs, text_boxes
         return text_imgs, boxes
 
 
@@ -405,93 +349,57 @@ class TextExtractor:
     """
 
     def __init__(self, tesseract_path: str = r"C:\Program Files\Tesseract-OCR\tesseract.exe") -> None:
+        """
+        Initialize TextExtractor and set the Tesseract executable path.
+
+        Args:
+            tesseract_path (str): Path to the Tesseract executable.
+        """
         pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
     def __preprocess_number_image(self, image):
         """
-        Preprocess image containing a line with numbers and separators
+        Preprocess image containing a line with numbers and separators.
+
+        Args:
+            image (np.ndarray): Input image.
+
+        Returns:
+            np.ndarray: Preprocessed image suitable for OCR.
         """
-        # Read image
         if image is None:
             raise ValueError(f"Could not load image")
 
-        # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         gray = cv2.resize(gray, None, fx=3, fy=3)
         gray = cv2.GaussianBlur(gray, (5, 5), 0)
         gray = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
-        # Apply adaptive thresholding
-        # gray = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,
-        #   cv2.THRESH_BINARY, 55, 21)
-
-        # kernel = np.ones((1, 1), np.uint8)
-        # gray1 = cv2.morphologyEx(gray, cv2.MORPH_OPEN, kernel)
-        # gray1 = cv2.morphologyEx(gray1, cv2.MORPH_DILATE, kernel, iterations=2)
-        # plt.imshow(gray1, cmap='gray')
-        # plt.axis('off')
-        # plt.show()
-        # exit(0)
-        # _, thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
         _, thresh = cv2.threshold(gray, 120, 255, cv2.THRESH_BINARY)
-        # thresh = cv2.GaussianBlur(thresh, (5, 5), 0)
-        # thresh = cv2.resize(thresh, None, fx=2, fy=2)
-        # thresh = cv2.fastNlMeansDenoising(thresh, None, 10, 7, 21)
-        # Apply morphological operations to clean up
         kernel = np.ones((1, 1), np.uint8)
         cleaned = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
         cleaned = cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel)
-        # cleaned = cv2.dilate(cleaned, kernel, iterations=1)
-
         _, thresh = cv2.threshold(cleaned, 120, 255, cv2.THRESH_BINARY)
         kernel = np.ones((2, 1), np.uint8)
         cleaned = cv2.dilate(thresh, kernel, iterations=2)
         cleaned = cv2.morphologyEx(
             cleaned, cv2.MORPH_OPEN, kernel, iterations=2)
-
         cleaned = cv2.bitwise_not(cleaned)
-        # cleaned = cv2.bitwise_not(thresh)
-
-        # Plot all images
-        # plt.figure(figsize=(12, 4))
-        # plt.subplot(1, 4, 1)
-        # plt.title("Original")
-        # plt.imshow(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
-        # plt.axis('off')
-
-        # plt.subplot(1, 4, 2)
-        # plt.title("Grayscale")
-        # plt.imshow(gray, cmap='gray')
-        # plt.axis('off')
-
-        # plt.subplot(1, 4, 3)
-        # plt.title("Thresholded")
-        # plt.imshow(thresh, cmap='gray')
-        # plt.axis('off')
-
-        # plt.subplot(1, 4, 4)
-        # plt.title("Processed")
-        # plt.imshow(cleaned, cmap='gray')
-        # plt.axis('off')
-
-        # plt.tight_layout()
-        # plt.show()
-
         return cleaned
 
     def extract_number(self, image):
         """
-        Extract formatted line with numbers, colons, dots, and commas
-        """
-        # Preprocess image
-        processed_img = self.__preprocess_number_image(image)
-        # Configure Tesseract for your specific character set
-        # Allow digits, colon, period, and comma
-        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
+        Extract formatted line with numbers, colons, dots, and commas.
 
-        # Extract text
+        Args:
+            image (np.ndarray): Input image.
+
+        Returns:
+            str: Extracted text.
+        """
+        processed_img = self.__preprocess_number_image(image)
+        custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789:., '
         text = pytesseract.image_to_string(
             processed_img, config=custom_config).strip()
-
         return text
 
     def extract_text(self, image, preprocess: bool = False) -> str:
@@ -499,45 +407,57 @@ class TextExtractor:
         Extract all text from an image using Tesseract OCR.
 
         Args:
-            image_path (str): Path to the input image.
+            image (np.ndarray): Input image.
+            preprocess (bool): Whether to preprocess the image for numbers.
 
         Returns:
             str: Extracted text.
         """
-        # Read image
         if image is None:
             raise ValueError(f"Could not load image")
 
-        # Configure Tesseract
         custom_config = r'--oem 3 --psm 6 -l eng'
-        # Convert to grayscale and resize for better OCR accuracy
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
-        # gray = cv2.resize(gray, None, fx=2, fy=2)
         if preprocess:
             gray = self.__preprocess_number_image(image)
-
-        # Extract text
         text = pytesseract.image_to_string(
             gray, config=custom_config).strip().replace('\n', ' ')
-
         return text
 
 
 class PriceAndStockExtractor:
+    """
+    Extracts price and stock information from a list of images containing text lines.
+    """
 
     def __init__(self, line_detector: DetectTextLines, text_extractor: TextExtractor):
+        """
+        Initialize PriceAndStockExtractor.
+
+        Args:
+            line_detector (DetectTextLines): Object for detecting text lines.
+            text_extractor (TextExtractor): Object for extracting text from images.
+        """
         self.line_detector = line_detector
         self.text_extractor = text_extractor
 
     def extract_price_and_stock(self, text_images: list[np.ndarray], limit: int = 2) -> list[tuple[str, str]]:
+        """
+        Extract price and stock pairs from a list of images.
+
+        Args:
+            text_images (list): List of images containing text lines.
+            limit (int): Maximum number of price/stock pairs to extract per window.
+
+        Returns:
+            list: List of tuples (price, stock).
+        """
         prices_and_stocks = []
         processed_windows = 0
         look_for_ratio_stock = True
         seen_prices = 0
         seen_ratios = 0
         for img in text_images:
-
             if look_for_ratio_stock:
                 extracted_text = self.text_extractor.extract_text(
                     img, preprocess=False)
@@ -578,8 +498,17 @@ class PriceAndStockExtractor:
 
 
 class MovementHandler:
+    """
+    Handles mouse and keyboard automation for interacting with the currency exchange UI.
+    """
 
     def __init__(self, config: ConfigPositions) -> None:
+        """
+        Initialize MovementHandler.
+
+        Args:
+            config (ConfigPositions): Configuration object with screen positions.
+        """
         self.config = config
         self.detector = DetectTextLines()
         self.text_extractor = TextExtractor()
@@ -587,7 +516,9 @@ class MovementHandler:
         self.pse = PriceAndStockExtractor(self.detector, self.text_extractor)
 
     def __show_market_window(self, delay=0.05) -> None:
-
+        """
+        Show the market window by moving the mouse and pressing 'alt'.
+        """
         mouse.move(10, 10)
         mouse.move(*self.config.get_position("Market_mid"))
         time.sleep(delay)
@@ -595,11 +526,19 @@ class MovementHandler:
         time.sleep(delay)
 
     def __hide_market_window(self, delay=0.1) -> None:
+        """
+        Hide the market window by releasing 'alt'.
+        """
         keyboard.release("alt")
         time.sleep(delay)
 
     def __find_item(self, item_name: str) -> None:
-        """Finds item in the items window and clicks on it."""
+        """
+        Finds item in the items window and clicks on it.
+
+        Args:
+            item_name (str): Name of the item to find.
+        """
         keyboard.press("ctrl")
         keyboard.press("f")
         time.sleep(0.1)
@@ -608,10 +547,6 @@ class MovementHandler:
 
         keyboard.write(item_name)
         time.sleep(0.5)
-        # screenshot items window
-        # detect text lines
-        # find first matching item name
-        # click it with offset
 
         item_window = self.screen_capture.items_window()
         time.sleep(0.1)
@@ -621,7 +556,6 @@ class MovementHandler:
             text = self.text_extractor.extract_text(img)
             print(f"Extracted item text: '{text}' at box {box}")
             if item_name.lower() == text.lower():
-                # click on the item
                 pos = self.config.get_position("Items_top_left")
                 x = pos[0] + box[0] + box[2] // 2
                 y = pos[1] + box[1] + box[3] // 2
@@ -631,15 +565,18 @@ class MovementHandler:
                 time.sleep(0.01)
                 break
 
-    # todo
-
     def change_item(self, item_name: str, wanted=True) -> None:
-        # load from conf position of want box
+        """
+        Change the selected item in the UI.
+
+        Args:
+            item_name (str): Name of the item to select.
+            wanted (bool): If True, select "I want" box, else "I have" box.
+        """
         if wanted:
             pos = self.config.get_position("I_want_name")
         else:
             pos = self.config.get_position("I_have_name")
-        # click on want box
         mouse.move(pos[0], pos[1])
         time.sleep(0.01)
         mouse.click(button='left')
@@ -647,17 +584,35 @@ class MovementHandler:
         self.__find_item(item_name)
 
     def __change_to_chaos(self) -> None:
+        """
+        Change selection to "Chaos Orb" in the UI.
+        """
         self.change_item("Chaos Orb", wanted=False)
 
     def __change_to_divine(self) -> None:
+        """
+        Change selection to "Divine Orb" in the UI.
+        """
         self.change_item("Divine Orb", wanted=False)
 
     def show(self) -> None:
+        """
+        Show the market window.
+        """
         self.__show_market_window()
         time.sleep(0.5)
         self.__hide_market_window()
 
     def __extract(self, item_name: str) -> list[tuple[str, str]]:
+        """
+        Extract price and stock for a given item.
+
+        Args:
+            item_name (str): Name of the item.
+
+        Returns:
+            list: List of tuples (price, stock).
+        """
         if item_name == "Chaos Orb":
             self.__change_to_chaos()
         else:
@@ -672,12 +627,24 @@ class MovementHandler:
         return prices_and_stock
 
     def extract_price(self) -> dict[str, list[tuple[str, str]]]:
+        """
+        Extract prices and stock for Chaos Orb and Divine Orb.
+
+        Returns:
+            dict: Mapping from item name to list of (price, stock) tuples.
+        """
         prices_with_stock = {}
         prices_with_stock["Chaos Orb"] = self.__extract("Chaos Orb")
         prices_with_stock["Divine Orb"] = self.__extract("Divine Orb")
         return prices_with_stock
 
     def extract_chaos_to_divine_ratio(self) -> list[tuple[str, str]]:
+        """
+        Extract the ratio of Chaos Orb to Divine Orb.
+
+        Returns:
+            list: List of tuples (price, stock) for Chaos Orb when Divine Orb is selected.
+        """
         self.__change_to_divine()
         return self.__extract("Chaos Orb")
 
