@@ -239,7 +239,8 @@ class DetectTextLines:
         )
 
         # Define a rectangular kernel that is wider than it is tall
-        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 3))
+        # kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (11, 3))
+        kernel: np.ndarray = cv2.getStructuringElement(cv2.MORPH_RECT, (10, 3))
 
         # Apply dilation to connect text components
         dilated: np.ndarray = cv2.dilate(binary, kernel, iterations=3)
@@ -461,7 +462,7 @@ class PriceAndStockExtractor:
             if look_for_ratio_stock:
                 extracted_text = self.text_extractor.extract_text(
                     img, preprocess=False)
-                print(f"Extracted text: '{extracted_text}'")
+                # print(f"Extracted text: '{extracted_text}'")
                 if "stock" in extracted_text.lower():
                     seen_ratios += 1
                     prices_and_stocks.append([])
@@ -470,6 +471,9 @@ class PriceAndStockExtractor:
             elif seen_ratios > 0 and not look_for_ratio_stock:
                 price_and_stock_img, _ = self.line_detector.detect_price(
                     img, merge=False)
+                # plt.imshow(cv2.cvtColor(price_and_stock_img[0], cv2.COLOR_BGR2RGB))
+                # plt.axis('off')
+                # plt.show()
                 price = self.text_extractor.extract_number(
                     price_and_stock_img[0])
                 stock = self.text_extractor.extract_number(
@@ -479,7 +483,7 @@ class PriceAndStockExtractor:
                 price = price.replace(":.", ":")
                 price = price.replace(".:", ":")
                 stock = stock.replace(".", ",")
-                print(f"Extracted price: '{price}', stock: '{stock}'")
+                # print(f"Extracted price: '{price}', stock: '{stock}'")
 
                 if price == "" or stock == "":
                     processed_windows += 1
@@ -515,17 +519,18 @@ class MovementHandler:
         self.screen_capture = ScreenCapture(config)
         self.pse = PriceAndStockExtractor(self.detector, self.text_extractor)
 
-    def __show_market_window(self, delay=0.05) -> None:
+    def __show_market_window(self, delay=0.01) -> None:
         """
         Show the market window by moving the mouse and pressing 'alt'.
         """
         mouse.move(10, 10)
+        time.sleep(0.3)
         mouse.move(*self.config.get_position("Market_mid"))
         time.sleep(delay)
         keyboard.press("alt")
         time.sleep(delay)
 
-    def __hide_market_window(self, delay=0.1) -> None:
+    def __hide_market_window(self, delay=0.01) -> None:
         """
         Hide the market window by releasing 'alt'.
         """
@@ -541,20 +546,20 @@ class MovementHandler:
         """
         keyboard.press("ctrl")
         keyboard.press("f")
-        time.sleep(0.1)
+        time.sleep(0.01)
         keyboard.release("f")
         keyboard.release("ctrl")
 
         keyboard.write(item_name)
-        time.sleep(0.5)
+        time.sleep(0.3)
 
         item_window = self.screen_capture.items_window()
-        time.sleep(0.1)
+        time.sleep(0.01)
         item_imgs, boxes = self.detector.detect_items(item_window)
-        time.sleep(0.1)
+        time.sleep(0.01)
         for img, box in zip(item_imgs, boxes):
             text = self.text_extractor.extract_text(img)
-            print(f"Extracted item text: '{text}' at box {box}")
+            # print(f"Extracted item text: '{text}' at box {box}")
             if item_name.lower() == text.lower():
                 pos = self.config.get_position("Items_top_left")
                 x = pos[0] + box[0] + box[2] // 2
@@ -562,7 +567,7 @@ class MovementHandler:
                 mouse.move(x, y)
                 time.sleep(0.01)
                 mouse.click(button='left')
-                time.sleep(0.01)
+                time.sleep(0.1)
                 break
 
     def change_item(self, item_name: str, wanted=True) -> None:
@@ -580,7 +585,7 @@ class MovementHandler:
         mouse.move(pos[0], pos[1])
         time.sleep(0.01)
         mouse.click(button='left')
-        time.sleep(0.1)
+        time.sleep(0.2)
         self.__find_item(item_name)
 
     def __change_to_chaos(self) -> None:
@@ -617,16 +622,16 @@ class MovementHandler:
             self.__change_to_chaos()
         else:
             self.__change_to_divine()
+        time.sleep(0.01)
         self.__show_market_window()
-        time.sleep(0.3)
+        time.sleep(0.01)
         market_window = self.screen_capture.price_window()
         price_imgs, _ = self.detector.detect_price(market_window)
         prices_and_stock = self.pse.extract_price_and_stock(price_imgs)
         self.__hide_market_window()
-        time.sleep(0.01)
         return prices_and_stock
 
-    def extract_price(self) -> dict[str, list[tuple[str, str]]]:
+    def extract_price(self) -> dict[str, list[list[tuple[str, str]]]]:
         """
         Extract prices and stock for Chaos Orb and Divine Orb.
 
@@ -645,8 +650,138 @@ class MovementHandler:
         Returns:
             list: List of tuples (price, stock) for Chaos Orb when Divine Orb is selected.
         """
-        self.__change_to_divine()
-        return self.__extract("Chaos Orb")
+        self.change_item("Chaos Orb", wanted=True)
+        time.sleep(0.1)
+        return self.__extract("Divine Orb")
+
+
+class ProfitCalculator:
+    """
+    Calculates the most profitable item to flip or provide liquidity.
+    Supports 4 strategies:
+      1. Buy with Divine → sell for Divine (liquidity)
+      2. Buy with Chaos → sell for Chaos (liquidity)
+      3. Buy with Divine → sell for Chaos (flip)
+      4. Buy with Chaos → sell for Divine (flip)
+    Uses average prices, ignores stock, and applies undercuts:
+      - Divine: -0.05
+      - Chaos: -0.5
+    """
+
+    def __init__(self, items_with_prices: dict[str, dict[str, list[list[tuple[str, str]]]]]):
+        self.items_with_prices = items_with_prices
+        self.chaos_to_divine_rate = self.__get_chaos_to_divine_rate()
+
+    def _parse_ratio(self, ratio_str: str) -> float:
+        ratio_str = ratio_str.replace(",", "")
+        if ":" in ratio_str:
+            left, right = ratio_str.split(":")
+            try:
+                left = float(left)
+                right = float(right)
+                return left / right if right != 0 else 0.0
+            except Exception:
+                return 0.0
+        try:
+            return float(ratio_str)
+        except Exception:
+            return 0.0
+
+    def _average_price(self, orders: list[tuple[str, str]]) -> float:
+        if not orders:
+            return 0.0
+        prices = [self._parse_ratio(price) for price, _ in orders[:2]]
+        return sum(prices) / len(prices)
+
+    def __get_chaos_to_divine_rate(self) -> float:
+        """
+        Returns the current chaos to divine exchange rate.
+        """
+        chaos_buy = self.items_with_prices.get(
+            "Chaos Orb", {}).get("Divine Orb", [])
+        if chaos_buy and chaos_buy[0]:
+            rate_str = chaos_buy[0][1][0][0]
+            self.chaos_to_divine_rate = self._parse_ratio(rate_str)
+        else:
+            self.chaos_to_divine_rate = 0.0
+        return self.chaos_to_divine_rate
+
+    def calculate_best_profit(self) -> tuple[dict[str, float | str | None], dict[str, list[dict[str, float | None]]]]:
+        """
+        Calculates the most profitable item to flip or provide liquidity.
+        Supports 4 strategies:
+          1. Buy with Divine → sell for Divine (liquidity)
+          2. Buy with Chaos → sell for Chaos (liquidity)
+          3. Buy with Divine → sell for Chaos (flip)
+          4. Buy with Chaos → sell for Divine (flip)
+        Uses average prices, ignores stock, and applies undercuts:
+          - Divine: -0.05
+          - Chaos: -0.5
+        Returns:
+            tuple: (best_result, results)
+              best_result: dict with keys 'item', 'profit', 'method'
+              results: dict mapping item to list of profit/method dicts
+        """
+        best_result = {"item": None, "profit": 0.0, "method": None}
+        results = {item: [] for item in self.items_with_prices.keys()}
+        for item, prices in self.items_with_prices.items():
+            if item == 'Chaos Orb':
+                continue
+            chaos_orders = prices.get("Chaos Orb", [])
+            divine_orders = prices.get("Divine Orb", [])
+
+            # Average top two orders
+            avg_chaos_buy = self._average_price(chaos_orders[1])
+            avg_chaos_sell = self._average_price(chaos_orders[0])
+            avg_divine_buy = self._average_price(divine_orders[1])
+            avg_divine_sell = self._average_price(divine_orders[0])
+
+            # Apply undercuts
+            avg_divine_buy_adj = avg_divine_buy - 0.05
+            avg_chaos_buy_adj = avg_chaos_buy - 0.5
+
+            # 1. Provide liquidity: Buy & Sell Divine (Divine Liquidity)
+            if avg_divine_sell > 0 and avg_divine_buy_adj > 0:
+                profit = avg_divine_buy_adj - avg_divine_sell
+                results[item].append(
+                    {"profit": profit, "method": "Divine Liquidity"})
+                if profit > best_result["profit"]:
+                    best_result = {"item": item, "profit": profit,
+                                   "method": "Divine Liquidity"}
+
+            # 2. Provide liquidity: Buy & Sell Chaos (Chaos Liquidity)
+            if avg_chaos_sell > 0 and avg_chaos_buy_adj > 0:
+                profit = avg_chaos_buy_adj - avg_chaos_sell
+                results[item].append(
+                    {"profit": profit, "method": "Chaos Liquidity"})
+                if profit > best_result["profit"]:
+                    best_result = {"item": item, "profit": profit,
+                                   "method": "Chaos Liquidity"}
+
+            # 3. Flip: Buy Divine → Sell Chaos
+            if avg_divine_sell > 0 and avg_chaos_buy_adj > 0:
+                cost_chaos = avg_divine_sell * self.chaos_to_divine_rate
+                chaos_received = avg_chaos_buy_adj
+                profit = chaos_received - cost_chaos
+                results[item].append(
+                    {"profit": profit, "method": "Divine→Chaos Flip"})
+                if profit > best_result["profit"]:
+                    best_result = {"item": item, "profit": profit,
+                                   "method": "Divine→Chaos Flip"}
+
+            # 4. Flip: Buy Chaos → Sell Divine
+            if avg_chaos_sell > 0 and avg_divine_buy_adj > 0:
+                chaos_received = avg_divine_buy_adj * self.chaos_to_divine_rate
+                cost_chaos = avg_chaos_sell
+                profit = chaos_received - cost_chaos
+                results[item].append(
+                    {"profit": profit, "method": "Chaos→Divine Flip"})
+                if profit > best_result["profit"]:
+                    best_result = {"item": item, "profit": profit,
+                                   "method": "Chaos→Divine Flip"}
+        for k, v in results.items():
+            v.sort(key=lambda x: x['profit'], reverse=True)
+        return best_result, results
 
 
 def extract(img_path: str = "img/screenshot2.png"):
@@ -697,22 +832,24 @@ def extract(img_path: str = "img/screenshot2.png"):
 
     # usage
     # input
-    # items = ["Scarab of Risk", "Fine delirium Orb"]
-    # return
-    # imtes_with_prices = {item_name: {currency: (price, stock)}}
+    mv = MovementHandler(ConfigPositions())
+    # items = ["Cartography Scarab of Risk", "Fine delirium Orb"]
+    items = ["Cartography Scarab of Risk"]
+    items_with_prices: dict[str, dict[str, list[list[tuple[str, str]]]]] = dict()
+    for item in items:
+        mv.change_item(item, wanted=True)
+        prices = mv.extract_price()
+        items_with_prices[item] = prices
+    items_with_prices["Chaos Orb"] = {"Divine Orb": [mv.extract_chaos_to_divine_ratio()]}
+    # print(items_with_prices)
 
-    # mv = MovementHandler(ConfigPositions())
-    # mv.change_item("Exalted Orb")
-    # # mv.change_item("Delirium Scarab of Paranoia")
-    # time.sleep(1)
-    # # mv.change_item("Chaos orb", wanted=False)
-    # # time.sleep(1)
-    # # mv.change_item("Divine orb", wanted=False)
-    # # time.sleep(1)
-    # # mv.show()
-    # prices = mv.extract_price()
-    # print(prices)
-    print(1_344)
+    # Calculate best profit for 100 divines using ProfitCalculator
+    # test_prices = {'Chaos Orb': {'Divine Orb': [[('144:1', '120'), ('143:1', '329')], [('146:1', '555'), ('147:1', '20')]]}, 'Cartography Scarab of Risk': {'Chaos Orb': [[('1:53.90', '50'), ('1:55', '101')], [('1:53.20', '3,320'), ('1:53', '3,710')]], 'Divine Orb': [[('2.35:1', '120'), ('2.35:1', '329')], [('2.80:1', '555'), ('2.90:1', '20')]]}, 'Fine delirium Orb': {'Chaos Orb': [[('1:39', '2'), ('1:39.49', '51')], [('1:33', '2,310'), ('1:32', '1,120')]], 'Divine Orb': [[('2.80:1', '2,240'), ('2.70:1', '667')], [('3:1', '742'), ('3.30:1', '947')]]}}
+    pf = ProfitCalculator(items_with_prices)
+    # pf = ProfitCalculator(test_prices)
+    best_flip, res = pf.calculate_best_profit()
+    print(f"Best flip: {best_flip}")
+    print(res)
 
 
 # Example usage
